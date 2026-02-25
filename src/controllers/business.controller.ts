@@ -5,12 +5,19 @@ import BusinessMembers, {
 import Business from '../models/business.model';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
+import { Request } from 'express';
+import ApiError from '../Error/handleApiError';
+// import { Request } from '../types';
 
-const createBusiness = asyncHandler(async (req, res, next) => {
-  const userId = req.user._id;
+const createBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
+  const userId = req.user?._id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new ApiError(400, "Invalid id")
+
+  }
   const business = await Business.create({
     ...req.body,
-    owner: userId, // logged-in user is owner
+    owner: userId,
   });
   await BusinessMembersModel.create({
     user: userId,
@@ -25,10 +32,12 @@ const createBusiness = asyncHandler(async (req, res, next) => {
   });
 });
 
-const getMyBusinesses = asyncHandler(async (req, res, next) => {
-  const userId = req.user._id;
+const getMyBusinesses = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
+  const userId = req.user?._id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new ApiError(400, "Invalid id")
 
-  // Find all memberships
+  }
   const memberships = await BusinessMembersModel.find({ user: userId })
     .populate('business', 'name category type owner status')
     .lean();
@@ -40,11 +49,14 @@ const getMyBusinesses = asyncHandler(async (req, res, next) => {
     data: memberships,
   });
 });
-const updateBusiness = asyncHandler(async (req, res, next) => {
-  const businessId = new Types.ObjectId(req.params.id);
-  const userId = req.user._id;
 
-  // Only owner or admin can update
+const updateBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
+  const businessId = new Types.ObjectId(req.params.id);
+  const userId = req.user?._id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new ApiError(400, "Invalid id")
+
+  }
   const membership = await BusinessMembersModel.findOne({
     business: businessId,
     user: userId,
@@ -58,12 +70,10 @@ const updateBusiness = asyncHandler(async (req, res, next) => {
     });
   }
 
-  const business = await BusinessMembersModel.findByIdAndUpdate(
+  const business = await Business.findByIdAndUpdate(
     businessId,
     req.body,
-    {
-      new: true,
-    },
+    { new: true }
   );
 
   sendResponse(res, {
@@ -73,11 +83,14 @@ const updateBusiness = asyncHandler(async (req, res, next) => {
     data: business,
   });
 });
-const deleteBusiness = asyncHandler(async (req, res, next) => {
-  const businessId = new Types.ObjectId(req.params.id);
-  const userId = req.user._id;
 
-  // Only owner can delete
+const deleteBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
+  const businessId = new Types.ObjectId(req.params.id);
+  const userId = req.user?._id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new ApiError(400, "Invalid id")
+
+  }
   const membership = await BusinessMembersModel.findOne({
     business: businessId,
     user: userId,
@@ -99,6 +112,7 @@ const deleteBusiness = asyncHandler(async (req, res, next) => {
     message: 'Business deleted successfully',
   });
 });
+
 export const businessController = {
   createBusiness,
   getMyBusinesses,

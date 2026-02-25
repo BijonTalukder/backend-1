@@ -12,7 +12,7 @@ const sendResponse = <T = any>(
   res: Response,
   data: SendResponseData<T>,
 ): void => {
-  console.log(data);
+
 
   const responseData = {
     statusCode: data.statusCode ?? 500,

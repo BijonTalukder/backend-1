@@ -240,3 +240,151 @@
 {"level":"info","message":"✅ MongoDB connected: localhost","timestamp":"2026-02-23 13:17:25"}
 {"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 13:17:28"}
 {"level":"info","message":"✅ MongoDB connected: localhost","timestamp":"2026-02-23 13:17:28"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 18:27:53"}
+{"level":"error","message":"MongoDB connection error: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2026-02-23 18:27:58"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 18:29:37"}
+{"level":"error","message":"MongoDB connection error: bad auth : authentication failed","timestamp":"2026-02-23 18:29:39"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 18:35:22"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-23 18:35:23"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 19:15:11"}
+{"level":"warn","message":"MongoDB disconnected. Attempting to reconnect...","timestamp":"2026-02-23 20:09:57"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 20:09:57"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:16:20"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:16:21"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:16:34"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:16:35"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:16:40"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:16:42"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:17:02"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:17:07"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:17:08"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:17:20"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:17:28"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:17:38"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:17:39"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:17:48"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:17:51"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:18:03"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:18:06"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 20:24:14"}
+{"level":"warn","message":"MongoDB disconnected. Attempting to reconnect...","timestamp":"2026-02-23 20:24:27"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 20:24:28"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 20:45:59"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 20:46:00"}
+{"level":"warn","message":"MongoDB disconnected. Attempting to reconnect...","timestamp":"2026-02-23 20:46:12"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-23 20:46:12"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-23 20:46:33"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-23 20:46:36"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-24 23:57:22"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-24 23:57:23"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-25 02:39:12"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-25 02:39:12"}
+{"level":"warn","message":"MongoDB disconnected. Attempting to reconnect...","timestamp":"2026-02-25 20:16:56"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-25 20:16:56"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 20:28:42"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 20:28:43"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 20:29:15"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-25 20:29:17"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:27:32"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:27:33"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:30:33"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:30:34"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:30:55"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:30:56"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:31:31"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:31:32"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:33:11"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:33:12"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:33:55"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:33:56"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:34:40"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:34:41"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:34:57"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:34:58"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:35:32"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:35:33"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:37:43"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:37:44"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:38:15"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:38:15"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:38:58"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:38:59"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 21:40:44"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 21:40:45"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 22:10:35"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 22:10:36"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 22:11:05"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-25 22:11:06"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 22:13:00"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-25 22:13:03"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-25 22:13:53"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-25 22:13:54"}
+{"level":"warn","message":"MongoDB disconnected. Attempting to reconnect...","timestamp":"2026-02-26 01:05:16"}
+{"level":"info","message":"MongoDB reconnected.","timestamp":"2026-02-26 01:05:16"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:06:47"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:06:48"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:07:40"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:07:41"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:09:30"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:09:32"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:12:58"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:13:00"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:13:32"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:13:33"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:14:08"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:14:09"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:14:36"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:14:37"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:18:39"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:18:40"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:19:05"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:19:06"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:19:31"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:19:42"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:19:43"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:21:18"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:21:20"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:27:21"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:27:22"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:30:21"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:30:23"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:31:03"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:31:07"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:31:22"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:31:34"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:31:35"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:31:49"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:31:50"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:31:58"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:32:00"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:32:45"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:32:46"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:33:18"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:33:19"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:33:48"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:33:50"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:34:00"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:34:11"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:34:13"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:35:12"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:35:14"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:36:00"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:36:01"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:42:15"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:42:17"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:42:25"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:42:26"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:42:49"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:42:51"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:43:07"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:43:08"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:43:35"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-02.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:43:36"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:43:50"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:43:57"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:43:58"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:44:21"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-01.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:44:22"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:53:39"}
+{"level":"info","message":"🚀 Server running in development mode on port 3000","timestamp":"2026-02-26 01:53:49"}
+{"level":"info","message":"✅ MongoDB connected: ac-yn8kwdo-shard-00-00.ywgnkn8.mongodb.net","timestamp":"2026-02-26 01:53:51"}

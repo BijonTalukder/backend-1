@@ -101,22 +101,7 @@ userSchema.virtual('fullName').get(function (this: IUser) {
   return `${this.firstName} ${this.lastName}`;
 });
 
-// ── Pre-save: Hash Password ───────────────────────────────
 
-userSchema.pre('save', async function (next) {
-  const user = this as IUser;
-
-  if (!user.isModified('password'))
-    //  return next();
-
-    user.password = await bcrypt.hash(user.password, 12);
-
-  if (!user.isNew) {
-    user.passwordChangedAt = new Date(Date.now() - 1000);
-  }
-
-  // next();
-});
 
 // ── Instance Methods ──────────────────────────────────────
 
@@ -124,7 +109,9 @@ userSchema.methods.comparePassword = async function (
   this: IUser,
   candidatePassword: string,
 ): Promise<boolean> {
-  return bcrypt.compare(candidatePassword, this.password);
+  const compareResult = await bcrypt.compare(candidatePassword, this.password);
+
+  return compareResult;
 };
 
 userSchema.methods.changedPasswordAfter = function (
