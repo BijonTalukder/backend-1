@@ -1,13 +1,31 @@
 // models/transaction-category.model.ts
-import mongoose, { Document, Types } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
 
-export type TransactionType = 'income' | 'expense' | 'both';
+export type TCategoryType = 'income' | 'expense' | 'both';
+export type TCategoryGroup =
+  | 'general'
+  | 'food'
+  | 'transport'
+  | 'housing'
+  | 'utility'
+  | 'healthcare'
+  | 'education'
+  | 'entertainment'
+  | 'shopping'
+  | 'salary'
+  | 'business'
+  | 'loan'
+  | 'transfer'
+  | 'other';
 
 export interface ITransactionCategory extends Document {
-  name: string; // e.g. "Basa Vara", "Utility Bill", "Salary", "Others"
-  type: TransactionType; // income / expense / both
-  business: Types.ObjectId; // belongs to which business
-  createdBy: Types.ObjectId | null; // null = admin/global
+  name: string;
+  type: TCategoryType;
+  group: TCategoryGroup;
+  icon?: string; // emoji or icon name
+  business: mongoose.Types.ObjectId | null; // null = global/admin
+  createdBy: mongoose.Types.ObjectId | null;
+  isGlobal: boolean;
   status: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -15,44 +33,54 @@ export interface ITransactionCategory extends Document {
 
 const transactionCategorySchema = new mongoose.Schema<ITransactionCategory>(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    name: { type: String, required: true, trim: true },
     type: {
       type: String,
       enum: ['income', 'expense', 'both'],
-      required: true,
       default: 'both',
     },
+    group: {
+      type: String,
+      enum: [
+        'general',
+        'food',
+        'transport',
+        'housing',
+        'utility',
+        'healthcare',
+        'education',
+        'entertainment',
+        'shopping',
+        'salary',
+        'business',
+        'loan',
+        'transfer',
+        'other',
+      ],
+      default: 'general',
+    },
+    icon: { type: String },
     business: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Business',
-      required: true,
+      default: null,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null,
-      required: false,
     },
-    status: {
-      type: Boolean,
-      default: true,
-    },
+    isGlobal: { type: Boolean, default: false },
+    status: { type: Boolean, default: true },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  },
+  { timestamps: true, versionKey: false },
 );
 
-transactionCategorySchema.index({ business: 1, name: 1 });
+transactionCategorySchema.index({ business: 1, status: 1 });
+transactionCategorySchema.index({ isGlobal: 1, status: 1 });
 
 const TransactionCategory = mongoose.model<ITransactionCategory>(
   'TransactionCategory',
   transactionCategorySchema,
 );
-
 export default TransactionCategory;

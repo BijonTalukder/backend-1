@@ -1,11 +1,12 @@
 import express, { Router } from 'express';
 import { authController } from '../controllers/auth.controller';
 import { auth } from '../middlewares/auth.middleware';
-import { transactionCategoryController } from '../models/transaction-category.controller';
+import { transactionCategoryController } from '../controllers/transaction-category.controller';
 import { invitationController } from '../controllers/invitation.controller';
 import { businessController } from '../controllers/business.controller';
 import { categoryController } from '../controllers/category.controller';
 import { userController } from '../controllers/user.controller';
+import { transactionController } from '../controllers/transaction.controller';
 
 const route: Router = express.Router();
 
@@ -15,7 +16,7 @@ route.post('/auth/login', authController.login);
 route.patch('/users/default-business', auth, userController.setDefaultBusiness);
 
 route.post('/businesses', auth, businessController.createBusiness);
-route.get('/businesses', auth, businessController.getMyBusinesses);
+route.get('/businesses/my', auth, businessController.getMyBusinesses);
 route.patch('/businesses/:id', auth, businessController.updateBusiness);
 route.delete('/businesses/:id', auth, businessController.deleteBusiness);
 
@@ -30,24 +31,57 @@ route.get(
 route.get('/categories/my', auth, categoryController.getMyCategories);
 route.patch('/categories/:id', auth, categoryController.updateCategory);
 route.delete('/categories/:id', auth, categoryController.deleteCategory);
-
+route.post('/transactions', auth, transactionController.createTransaction);
+route.get(
+  '/transactions/business/:businessId',
+  auth,
+  transactionController.getBusinessTransactions,
+);
+route.get(
+  '/transactions/dues/:businessId',
+  auth,
+  transactionController.getPendingDues,
+);
+route.get(
+  '/transactions/summary/:businessId',
+  auth,
+  transactionController.getMonthlySummary,
+);
+route.patch('/transactions/:id', auth, transactionController.updateTransaction);
+route.delete(
+  '/transactions/:id',
+  auth,
+  transactionController.deleteTransaction,
+);
 route.post(
-  '/transaction-category',
+  '/transactions/:id/settle',
+  auth,
+  transactionController.settleTransaction,
+);
+route.get(
+  '/transactions/:id/settlements',
+  auth,
+  transactionController.getSettlements,
+);
+
+// ── Transaction Categories ─────────────────────────────
+route.post(
+  '/transaction-categories',
   auth,
   transactionCategoryController.createTransactionCategory,
-); // ✅ leading slash
+);
 route.get(
-  '/transaction-category/:businessId',
+  '/transaction-categories/:businessId',
   auth,
   transactionCategoryController.getTransactionCategories,
 );
 route.patch(
-  '/transaction-category/:id',
+  '/transaction-categories/:id',
   auth,
   transactionCategoryController.updateTransactionCategory,
 );
 route.delete(
-  '/transaction-category/:id',
+  '/transaction-categories/:id',
   auth,
   transactionCategoryController.deleteTransactionCategory,
 );
