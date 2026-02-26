@@ -7,23 +7,37 @@ import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import { Request } from 'express';
 import ApiError from '../Error/handleApiError';
-// import { Request } from '../types';
+import User from '../models/user.model';
 
-const createBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
+const createBusiness = asyncHandler(async (req: Request, res, next) => {
   const userId = req.user?._id;
-  if (!userId || !Types.ObjectId.isValid(userId)) {
-    throw new ApiError(400, "Invalid id")
 
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user id');
   }
+
+  const objectUserId = new Types.ObjectId(String(userId));
+  const { name, type, category } = req.body;
+
   const business = await Business.create({
-    ...req.body,
-    owner: userId,
+    name,
+    type,
+    owner: objectUserId,
+    category: category ?? null, // ✅ optional
+    mealEnabled: type === 'mass', // ✅ auto set
   });
+
   await BusinessMembersModel.create({
-    user: userId,
+    user: objectUserId,
     business: business._id,
     role: 'owner',
   });
+
+  // ✅ defaultBusiness user এ set করো
+  await User.findByIdAndUpdate(objectUserId, {
+    defaultBusiness: business._id,
+  });
+
   sendResponse(res, {
     statusCode: 201,
     success: true,
@@ -32,13 +46,16 @@ const createBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅
   });
 });
 
-const getMyBusinesses = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
+const getMyBusinesses = asyncHandler(async (req: Request, res, next) => {
   const userId = req.user?._id;
-  if (!userId || !Types.ObjectId.isValid(userId)) {
-    throw new ApiError(400, "Invalid id")
 
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user id');
   }
-  const memberships = await BusinessMembersModel.find({ user: userId })
+
+  const objectUserId = new Types.ObjectId(String(userId));
+
+  const memberships = await BusinessMembersModel.find({ user: objectUserId })
     .populate('business', 'name category type owner status')
     .lean();
 
@@ -50,18 +67,29 @@ const getMyBusinesses = asyncHandler(async (req: Request, res, next) => {  // �
   });
 });
 
-const updateBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
-  const businessId = new Types.ObjectId(req.params.id);
-  const userId = req.user?._id;
-  if (!userId || !Types.ObjectId.isValid(userId)) {
-    throw new ApiError(400, "Invalid id")
+const updateBusiness = asyncHandler(async (req: Request, res, next) => {
+  const { id } = req.params;
 
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, 'Invalid business id');
   }
+
+  const businessId = new Types.ObjectId(id);
+
+  const userId = req.user?._id;
+
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user id');
+  }
+
+  const objectUserId = new Types.ObjectId(String(userId));
+
   const membership = await BusinessMembersModel.findOne({
     business: businessId,
-    user: userId,
+    user: objectUserId,
     role: { $in: ['owner', 'admin'] },
   });
+
   if (!membership) {
     return sendResponse(res, {
       statusCode: 403,
@@ -70,11 +98,9 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅
     });
   }
 
-  const business = await Business.findByIdAndUpdate(
-    businessId,
-    req.body,
-    { new: true }
-  );
+  const business = await Business.findByIdAndUpdate(businessId, req.body, {
+    new: true,
+  });
 
   sendResponse(res, {
     statusCode: 200,
@@ -84,18 +110,29 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅
   });
 });
 
-const deleteBusiness = asyncHandler(async (req: Request, res, next) => {  // ✅ Change req type
-  const businessId = new Types.ObjectId(req.params.id);
-  const userId = req.user?._id;
-  if (!userId || !Types.ObjectId.isValid(userId)) {
-    throw new ApiError(400, "Invalid id")
+const deleteBusiness = asyncHandler(async (req: Request, res, next) => {
+  const { id } = req.params;
 
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, 'Invalid business id');
   }
+
+  const businessId = new Types.ObjectId(id);
+
+  const userId = req.user?._id;
+
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user id');
+  }
+
+  const objectUserId = new Types.ObjectId(String(userId));
+
   const membership = await BusinessMembersModel.findOne({
     business: businessId,
-    user: userId,
+    user: objectUserId,
     role: 'owner',
   });
+
   if (!membership) {
     return sendResponse(res, {
       statusCode: 403,

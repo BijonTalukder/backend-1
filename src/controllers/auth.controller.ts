@@ -4,7 +4,7 @@ import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { generateToken } from '../utils/tokenHandler';
 import config from '../config/config';
-import * as bcrypt from 'bcryptjs';  // ✅ Fix 1
+import * as bcrypt from 'bcryptjs'; // ✅ Fix 1
 
 const register = asyncHandler(async (req, res, next) => {
   const { firstName, lastName, email, password, role } = req.body;
@@ -23,7 +23,9 @@ const register = asyncHandler(async (req, res, next) => {
     statusCode: 201,
     success: true,
     message: 'User created successfully',
-    data: user,
+    data: {
+      user,
+    },
   });
 });
 

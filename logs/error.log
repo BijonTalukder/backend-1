@@ -1,2 +1,3 @@
 {"level":"error","message":"MongoDB connection error: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2026-02-23 18:27:58"}
 {"level":"error","message":"MongoDB connection error: bad auth : authentication failed","timestamp":"2026-02-23 18:29:39"}
+{"level":"error","message":"MongoDB connection error: Server selection timed out after 5000 ms","timestamp":"2026-02-26 12:17:48"}

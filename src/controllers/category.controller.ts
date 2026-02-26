@@ -1,10 +1,18 @@
+import { Types } from 'mongoose';
 import Category from '../models/category.model';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
+import ApiError from '../Error/handleApiError';
 
 const createCategory = asyncHandler(async (req, res, next) => {
+  const userId = req.user?._id;
+
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user id');
+  }
   const category = await Category.create({
     ...req.body,
+    createdBy: new Types.ObjectId(String(userId)),
   });
   sendResponse(res, {
     statusCode: 201,
@@ -32,7 +40,7 @@ const getAllActiveCategories = asyncHandler(async (req, res, next) => {
   });
 });
 const getMyCategories = asyncHandler(async (req, res, next) => {
-  const userId = req.user._id;
+  const userId = req.user?._id;
   const categories = await Category.find({
     status: true,
     $or: [

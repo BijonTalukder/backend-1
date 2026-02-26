@@ -1,26 +1,32 @@
+// models/business.model.ts
 import mongoose, { Document } from 'mongoose';
 
-export const BUSINESS_TYPES = ['individual', 'company', 'others'];
-export interface Business extends Document {
+export const BUSINESS_TYPES = ['personal', 'company', 'mass'] as const;
+export type BusinessType = (typeof BUSINESS_TYPES)[number];
+
+export interface IBusiness extends Document {
   name: string;
-  category: mongoose.Types.ObjectId; // category এর reference
+  category?: mongoose.Types.ObjectId;
   status: boolean;
-  owner: mongoose.Types.ObjectId; // যে user বা admin create করেছে
+  owner: mongoose.Types.ObjectId;
+  type: BusinessType;
+  mealEnabled: boolean;
+  currency: string;
   createdAt: Date;
   updatedAt: Date;
-  type: (typeof BUSINESS_TYPES)[number];
 }
-const businessSchema = new mongoose.Schema<Business>(
+
+const businessSchema = new mongoose.Schema<IBusiness>(
   {
     name: {
       type: String,
       required: true,
-      unique: false, // এখন multiple users same name দিতে পারবে
     },
     category: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Category',
-      required: true,
+      ref: 'BusinessCategory',
+      required: false, // ✅ optional
+      default: null,
     },
     status: {
       type: Boolean,
@@ -33,15 +39,22 @@ const businessSchema = new mongoose.Schema<Business>(
     },
     type: {
       type: String,
-      enum: BUSINESS_TYPES,
-      default: 'individual',
+      enum: BUSINESS_TYPES, // ✅ ['personal', 'company', 'mass']
+      default: 'personal',
+    },
+    mealEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    currency: {
+      type: String,
+      default: 'BDT',
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  },
+  { timestamps: true, versionKey: false },
 );
+
 businessSchema.index({ name: 1, owner: 1 });
-const Business = mongoose.model<Business>('Business', businessSchema);
+
+const Business = mongoose.model<IBusiness>('Business', businessSchema);
 export default Business;
