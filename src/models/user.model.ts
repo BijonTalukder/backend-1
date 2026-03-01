@@ -25,6 +25,7 @@ export interface IUser extends Document {
   avatar?: string;
   createdAt: Date;
   updatedAt: Date;
+  onboardingCompleted: boolean;
 
   // virtual
   fullName: string;
@@ -80,8 +81,16 @@ const userSchema = new mongoose.Schema<IUser>(
       type: Boolean,
       default: true,
     },
-    lastLogin: Date,
-    avatar: String,
+    onboardingCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    lastLogin: {
+      type: Date,
+    },
+    avatar: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -92,7 +101,7 @@ const userSchema = new mongoose.Schema<IUser>(
 
 // ── Indexes ───────────────────────────────────────────────
 
-userSchema.index({ email: 1 });
+// userSchema.index({ email: 1 });
 userSchema.index({ organization: 1, role: 1 });
 
 // ── Virtual ───────────────────────────────────────────────
@@ -100,8 +109,6 @@ userSchema.index({ organization: 1, role: 1 });
 userSchema.virtual('fullName').get(function (this: IUser) {
   return `${this.firstName} ${this.lastName}`;
 });
-
-
 
 // ── Instance Methods ──────────────────────────────────────
 

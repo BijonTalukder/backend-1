@@ -4,7 +4,7 @@ export interface BusinessMembers extends Document {
   business: mongoose.Types.ObjectId;
   user: mongoose.Types.ObjectId;
   role: 'owner' | 'admin' | 'member';
-
+  status: true;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +24,10 @@ const businessMembersSchema = new mongoose.Schema<BusinessMembers>(
       type: String,
       enum: ['owner', 'admin', 'member'],
       default: 'member',
+    },
+    status: {
+      type: Boolean,
+      default: true,
     },
   },
   {

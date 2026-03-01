@@ -57,7 +57,6 @@ const invitationSchema = new mongoose.Schema<IInvitation>(
   { timestamps: true, versionKey: false },
 );
 
-invitationSchema.index({ token: 1 });
 invitationSchema.index({ email: 1, business: 1 });
 
 const Invitation = mongoose.model<IInvitation>('Invitation', invitationSchema);

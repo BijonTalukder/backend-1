@@ -27,12 +27,14 @@ const requireMembership = async (
   userId: Types.ObjectId,
   roles: string[],
 ) => {
+  console.log(businessId, userId, roles);
   const m = await BusinessMembersModel.findOne({
     business: businessId,
     user: userId,
     role: { $in: roles },
-    status: 'active',
+    // status: 'active',
   });
+  console.log(m);
   if (!m) throw new ApiError(403, 'Access denied');
   return m;
 };
@@ -48,10 +50,10 @@ const createTransaction = asyncHandler(async (req: Request, res, next) => {
     note,
     date,
     reference,
-    paidFor = [], // [{ member, amount, note }]
+    paidFor = [],
     splitType = 'none',
-    toMember, // transfer এর জন্য
-    memberId, // কার behalf এ (admin করলে)
+    toMember,
+    memberId,
   } = req.body;
 
   if (!businessId || !Types.ObjectId.isValid(businessId))
@@ -71,13 +73,11 @@ const createTransaction = asyncHandler(async (req: Request, res, next) => {
   if (!category || !Types.ObjectId.isValid(category))
     throw new ApiError(400, 'Invalid category');
 
-  // member — admin হলে অন্যের behalf এ add করতে পারবে
   const member =
     memberId && Types.ObjectId.isValid(memberId)
       ? new Types.ObjectId(memberId)
       : objectUserId;
 
-  // paidFor validate & parse
   const paidForParsed = (paidFor as any[]).map((p) => {
     if (!p.member || !Types.ObjectId.isValid(p.member))
       throw new ApiError(400, 'Invalid paidFor member');
@@ -90,11 +90,9 @@ const createTransaction = asyncHandler(async (req: Request, res, next) => {
     };
   });
 
-  // settlement status নির্ধারণ
   const hasOthers = paidForParsed.length > 0;
   const settlementStatus = hasOthers ? 'pending' : 'not_applicable';
 
-  // transfer হলে toMember দরকার
   if (type === 'transfer') {
     if (!toMember || !Types.ObjectId.isValid(toMember))
       throw new ApiError(400, 'Invalid toMember for transfer');
@@ -316,7 +314,6 @@ const getSettlements = asyncHandler(async (req: Request, res, next) => {
   });
 });
 
-/* ─── Pending dues (who owes whom) ───────────────────── */
 const getPendingDues = asyncHandler(async (req: Request, res, next) => {
   const { businessId } = req.params;
   if (
@@ -336,7 +333,6 @@ const getPendingDues = asyncHandler(async (req: Request, res, next) => {
     'viewer',
   ]);
 
-  // pending বা partial transactions যেগুলোতে paidFor আছে
   const transactions = await Transaction.find({
     business: objectBusinessId,
     settlementStatus: { $in: ['pending', 'partial'] },
@@ -346,7 +342,6 @@ const getPendingDues = asyncHandler(async (req: Request, res, next) => {
     .populate('paidFor.member', 'firstName lastName email')
     .lean();
 
-  // dues map তৈরি
   const duesMap: Record<
     string,
     { from: any; to: any; amount: number; transactions: any[] }
@@ -460,7 +455,6 @@ const deleteTransaction = asyncHandler(async (req: Request, res, next) => {
   });
 });
 
-/* ─── Monthly Summary ─────────────────────────────────── */
 const getMonthlySummary = asyncHandler(async (req: Request, res, next) => {
   const { businessId } = req.params;
   const { objectUserId } = getValidIds(req.user?._id);

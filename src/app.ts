@@ -16,7 +16,10 @@ app.use(
   }),
 );
 app.use(express.json());
-
+console.log('app.js');
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
 app.use('/api', route);
 
 // Routes
