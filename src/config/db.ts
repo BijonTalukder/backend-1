@@ -1,10 +1,9 @@
 import logger from '../utils/Logger';
 import mongoose from 'mongoose';
 const connectDB = async () => {
-  const uri =
-    process.env.NODE_ENV === 'test'
-      ? process.env.MONGO_URI_TEST
-      : process.env.MONGO_URI;
+  const uri = process.env.MONGO_URI;
+  console.log("MONGO_URI:", process.env.MONGO_URI, uri);
+
   if (!uri) {
     logger.error('MONGO_URI is not defined in environment variables.');
     process.exit(1);
