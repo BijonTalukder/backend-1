@@ -7,8 +7,8 @@ app.use(
   cors({
     origin: [
       'http://localhost:5173', // Vite default
-      'http://localhost:3000',
-      'http://localhost:8081', // fallback
+      'http://localhost:3000', // fallback
+      'https://cashbook-frontend-wine.vercel.app',
       process.env.CLIENT_URL ?? '',
     ],
     credentials: true, // ✅ cookie/auth header এর জন্য
@@ -17,7 +17,10 @@ app.use(
   }),
 );
 app.use(express.json());
-
+console.log('app.js');
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
 app.use('/api', route);
 
 // Routes
