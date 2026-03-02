@@ -4,7 +4,14 @@ import cors from 'cors';
 import { errorHandler } from './middlewares/errorHandler';
 const app: Application = express();
 app.use(
-  cors(),
+  cors({
+    origin: [
+      "https://cashbook-frontend-wine.vercel.app/"
+    ],
+    // credentials: true, // ✅ cookie/auth header এর জন্য
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
 );
 app.use(express.json());
 app.get('/', (req, res) => {
