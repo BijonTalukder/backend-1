@@ -1,16 +1,13 @@
-// models/invitation.model.ts
 import mongoose, { Document } from 'mongoose';
-
-export type InviteStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
-export type InviteRole = 'admin' | 'member';
+import crypto from 'crypto';
 
 export interface IInvitation extends Document {
   business: mongoose.Types.ObjectId;
   invitedBy: mongoose.Types.ObjectId;
   email: string;
-  role: InviteRole;
+  role: 'admin' | 'member';
   token: string;
-  status: InviteStatus;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -41,12 +38,12 @@ const invitationSchema = new mongoose.Schema<IInvitation>(
     },
     token: {
       type: String,
-      required: true,
       unique: true,
+      default: () => crypto.randomBytes(32).toString('hex'),
     },
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'rejected', 'expired'],
+      enum: ['pending', 'accepted', 'declined', 'expired', 'rejected'],
       default: 'pending',
     },
     expiresAt: {
@@ -57,8 +54,9 @@ const invitationSchema = new mongoose.Schema<IInvitation>(
   { timestamps: true, versionKey: false },
 );
 
-invitationSchema.index({ token: 1 });
 invitationSchema.index({ email: 1, business: 1 });
+invitationSchema.index({ token: 1 });
+invitationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index
 
 const Invitation = mongoose.model<IInvitation>('Invitation', invitationSchema);
 export default Invitation;

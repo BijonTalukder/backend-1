@@ -4,10 +4,11 @@ export interface BusinessMembers extends Document {
   business: mongoose.Types.ObjectId;
   user: mongoose.Types.ObjectId;
   role: 'owner' | 'admin' | 'member';
-
+  status: boolean; // ✅ literal `true` থেকে `boolean` এ change
   createdAt: Date;
   updatedAt: Date;
 }
+
 const businessMembersSchema = new mongoose.Schema<BusinessMembers>(
   {
     business: {
@@ -25,16 +26,20 @@ const businessMembersSchema = new mongoose.Schema<BusinessMembers>(
       enum: ['owner', 'admin', 'member'],
       default: 'member',
     },
+    status: {
+      type: Boolean,
+      default: true,
+    },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  },
+  { timestamps: true, versionKey: false },
 );
+
 businessMembersSchema.index({ business: 1, user: 1 }, { unique: true });
+
 export const BusinessMembersModel = mongoose.model<BusinessMembers>(
   'BusinessMembers',
   businessMembersSchema,
   'BusinessMembers',
 );
+
 export default BusinessMembers;

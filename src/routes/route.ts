@@ -7,6 +7,8 @@ import { businessController } from '../controllers/business.controller';
 import { categoryController } from '../controllers/category.controller';
 import { userController } from '../controllers/user.controller';
 import { transactionController } from '../controllers/transaction.controller';
+import { businessMembersController } from '../controllers/business-member.controller';
+import { mealController } from '../controllers/meal.controller';
 
 const route: Router = express.Router();
 
@@ -86,18 +88,73 @@ route.delete(
   transactionCategoryController.deleteTransactionCategory,
 );
 
-route.post('/invitation/', auth, invitationController.sendInvitation);
-route.get('/invitation/check/:token', invitationController.checkInvitation); // ✅ auth লাগবে না
 route.post(
-  '/invitation/accept/:token',
+  '/business-members/:businessId/invite',
+  auth,
+  invitationController.sendInvitation,
+);
+
+// ── Get invite details by token (public — no auth needed)
+route.get(
+  '/invitations/token/:token',
+  invitationController.getInvitationByToken,
+);
+
+// ── Accept (auth required)
+route.post(
+  '/invitations/token/:token/accept',
   auth,
   invitationController.acceptInvitation,
 );
-route.post('/invitation/reject/:token', invitationController.rejectInvitation); // ✅ auth লাগবে না
-route.get(
-  '/invitation/business/:businessId',
-  auth,
-  invitationController.getBusinessInvitations,
+
+// ── Decline (no auth needed — anyone with link can decline)
+route.post(
+  '/invitations/token/:token/decline',
+  invitationController.declineInvitation,
 );
+
+// ── My pending invitations
+route.get('/invitations/mine', auth, invitationController.getMyInvitations);
+
+// ── Sent invitations for a business
+route.get(
+  '/invitations/sent/:businessId',
+  auth,
+  invitationController.getSentInvitations,
+);
+
+// ── Cancel invitation
+route.delete(
+  '/invitations/:invitationId',
+  auth,
+  invitationController.cancelInvitation,
+);
+
+route.get(
+  '/business-members/:businessId',
+  auth,
+  businessMembersController.getMembers,
+);
+route.post(
+  '/business-members/:businessId/invite',
+  auth,
+  businessMembersController.inviteMember,
+);
+route.delete(
+  '/business-members/:businessId/:memberId',
+  auth,
+  businessMembersController.removeMember,
+);
+route.patch(
+  '/business-members/:businessId/:memberId',
+  auth,
+  businessMembersController.updateMemberRole,
+);
+
+route.get('/meals/summary', auth, mealController.getMealSummary);
+route.get('/meals/', auth, mealController.getMeals);
+route.post('/meals/', auth, mealController.addMeal);
+route.patch('/meals/:id', auth, mealController.updateMeal);
+route.delete('meals/:id', auth, mealController.deleteMeal);
 
 export default route;
