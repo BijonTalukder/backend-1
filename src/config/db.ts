@@ -1,7 +1,8 @@
 import logger from '../utils/Logger';
 import mongoose from 'mongoose';
+import config from './config';
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI;
+  const uri = config.mongoURI;
   console.log("MONGO_URI:", process.env.MONGO_URI, uri);
 
   if (!uri) {
