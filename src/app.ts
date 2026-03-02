@@ -8,6 +8,7 @@ app.use(
     origin: [
       'http://localhost:5173', // Vite default
       'http://localhost:3000', // fallback
+      'https://cashbook-frontend-wine.vercel.app',
       process.env.CLIENT_URL ?? '',
     ],
     credentials: true, // ✅ cookie/auth header এর জন্য
