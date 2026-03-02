@@ -18,6 +18,14 @@ const register = asyncHandler(async (req, res, next) => {
     password: hashedPassword,
     role: safeRole,
   });
+  const userPayload = {
+    id: user._id.toString(),
+    email: user.email,
+    role: user.role,
+    firstName: user.firstName,
+    lastName: user.lastName,
+  };
+  const token = await generateToken(userPayload, config.jwtSecret);
 
   sendResponse(res, {
     statusCode: 201,
@@ -25,6 +33,7 @@ const register = asyncHandler(async (req, res, next) => {
     message: 'User created successfully',
     data: {
       user,
+      token,
     },
   });
 });

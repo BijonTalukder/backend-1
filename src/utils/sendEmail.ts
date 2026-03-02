@@ -9,16 +9,19 @@ interface EmailOptions {
 
 const sendEmail = async (options: EmailOptions): Promise<void> => {
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT),
+    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT) || 465,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 
   await transporter.sendMail({
-    from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+    from: process.env.MAIL_FROM || `No Reply <${process.env.SMTP_USER}>`,
     to: options.to,
     subject: options.subject,
     html: options.html,

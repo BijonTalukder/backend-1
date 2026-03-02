@@ -8,6 +8,7 @@ import { categoryController } from '../controllers/category.controller';
 import { userController } from '../controllers/user.controller';
 import { transactionController } from '../controllers/transaction.controller';
 import { businessMembersController } from '../controllers/business-member.controller';
+import { mealController } from '../controllers/meal.controller';
 
 const route: Router = express.Router();
 
@@ -149,5 +150,11 @@ route.patch(
   auth,
   businessMembersController.updateMemberRole,
 );
+
+route.get('/meals/summary', auth, mealController.getMealSummary);
+route.get('/meals/', auth, mealController.getMeals);
+route.post('/meals/', auth, mealController.addMeal);
+route.patch('/meals/:id', auth, mealController.updateMeal);
+route.delete('meals/:id', auth, mealController.deleteMeal);
 
 export default route;
