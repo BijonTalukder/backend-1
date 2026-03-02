@@ -39,7 +39,7 @@ const businessSchema = new mongoose.Schema<IBusiness>(
     },
     type: {
       type: String,
-      enum: BUSINESS_TYPES, // ✅ ['personal', 'company', 'mass']
+      // enum: BUSINESS_TYPES, // ✅ ['personal', 'company', 'mass']
       default: 'personal',
     },
     mealEnabled: {

@@ -7,7 +7,8 @@ app.use(
   cors({
     origin: [
       'http://localhost:5173', // Vite default
-      'http://localhost:3000', // fallback
+      'http://localhost:3000',
+      'http://localhost:8081', // fallback
       process.env.CLIENT_URL ?? '',
     ],
     credentials: true, // ✅ cookie/auth header এর জন্য
