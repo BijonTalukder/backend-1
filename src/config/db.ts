@@ -15,13 +15,16 @@ const connectDB = async () => {
     });
     logger.info(`✅ MongoDB connected: ${conn.connection.host}`);
     mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected. Attempting to reconnect...')
       logger.warn('MongoDB disconnected. Attempting to reconnect...');
     });
 
     mongoose.connection.on('reconnected', () => {
+      console.log("mongofb connect")
       logger.info('MongoDB reconnected.');
     });
   } catch (error) {
+    console.log(`MongoDB connection error: ${error instanceof Error ? error.message : error}`,)
     logger.error(
       `MongoDB connection error: ${error instanceof Error ? error.message : error}`,
     );
