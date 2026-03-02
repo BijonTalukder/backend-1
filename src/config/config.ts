@@ -12,7 +12,7 @@ interface Config {
 const config: Config = {
   port: Number(process.env.PORT) || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
-  mongoURI: process.env.MONGO_URI || 'mongodb://localhost:27017/testdb',
+  mongoURI: process.env.MONGO_URI || 'mongodb+srv://BookAppsAdmin:0cc2Y35qpKHH2eTE@cluster0.ywgnkn8.mongodb.net/CashBook?retryWrites=true&w=majority',
   jwtSecret: process.env.JWT_SECRET || 'secret',
 };
 
