@@ -9,11 +9,10 @@ app.use(
       'http://localhost:5173', // Vite default
       'http://localhost:3000', // fallback
       'https://cashbook-frontend-wine.vercel.app',
-      process.env.CLIENT_URL ?? '',
     ],
     // credentials: true, // ✅ cookie/auth header এর জন্য
-    // methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    // allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
 app.use(express.json());
