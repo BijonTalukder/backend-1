@@ -2,17 +2,15 @@ import express, { Application } from 'express';
 import route from './routes/route';
 import cors from 'cors';
 import { errorHandler } from './middlewares/errorHandler';
-import cookieParser from "cookie-parser"
+import cookieParser from 'cookie-parser';
 
 const app: Application = express();
 
-app.use(cookieParser())
+app.use(cookieParser());
 app.use(
   cors({
-    origin: [
-      "https://cashbook-frontend-wine.vercel.app"
-    ],
-    // credentials: true, // ✅ cookie/auth header এর জন্য
+    origin: 'https://cashbook-frontend-wine.vercel.app', // single origin only
+    credentials: true, // ✅ allow cookies and auth headers
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
