@@ -23,8 +23,8 @@ const createBusiness = asyncHandler(async (req: Request, res, next) => {
     name,
     type,
     owner: objectUserId,
-    category: category ?? null, // ✅ optional
-    mealEnabled: type === 'mass', // ✅ auto set
+    category: category ?? null,
+    mealEnabled: type === 'mass',
   });
 
   await BusinessMembersModel.create({
@@ -33,7 +33,6 @@ const createBusiness = asyncHandler(async (req: Request, res, next) => {
     role: 'owner',
   });
 
-  // ✅ defaultBusiness user এ set করো
   await User.findByIdAndUpdate(objectUserId, {
     defaultBusiness: business._id,
   });
@@ -75,7 +74,6 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {
   }
 
   const businessId = new Types.ObjectId(id);
-
   const userId = req.user?._id;
 
   if (!userId || !Types.ObjectId.isValid(String(userId))) {
@@ -118,7 +116,6 @@ const deleteBusiness = asyncHandler(async (req: Request, res, next) => {
   }
 
   const businessId = new Types.ObjectId(id);
-
   const userId = req.user?._id;
 
   if (!userId || !Types.ObjectId.isValid(String(userId))) {
@@ -150,9 +147,34 @@ const deleteBusiness = asyncHandler(async (req: Request, res, next) => {
   });
 });
 
+/* ── Complete onboarding ─────────────────────────────── */
+const completeOnboarding = asyncHandler(async (req: Request, res) => {
+  const userId = req.user?._id;
+
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user id');
+  }
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { onboardingCompleted: true },
+    { new: true, select: '-password' },
+  );
+
+  if (!user) throw new ApiError(404, 'User not found');
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Onboarding completed',
+    data: { onboardingCompleted: user.onboardingCompleted },
+  });
+});
+
 export const businessController = {
   createBusiness,
   getMyBusinesses,
   updateBusiness,
   deleteBusiness,
+  completeOnboarding,
 };

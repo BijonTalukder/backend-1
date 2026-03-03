@@ -22,7 +22,7 @@ route.post('/businesses', auth, businessController.createBusiness);
 route.get('/businesses/my', auth, businessController.getMyBusinesses);
 route.patch('/businesses/:id', auth, businessController.updateBusiness);
 route.delete('/businesses/:id', auth, businessController.deleteBusiness);
-
+route.post('/businesses/complete-onboarding', auth, businessController.completeOnboarding);
 //category
 route.post('/categories', auth, categoryController.createCategory);
 route.get('/categories', auth, categoryController.getAllCategories);
