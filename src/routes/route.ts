@@ -9,6 +9,7 @@ import { userController } from '../controllers/user.controller';
 import { transactionController } from '../controllers/transaction.controller';
 import { businessMembersController } from '../controllers/business-member.controller';
 import { mealController } from '../controllers/meal.controller';
+import { massController } from '../controllers/mass.controller';
 
 const route: Router = express.Router();
 
@@ -156,5 +157,6 @@ route.get('/meals/', auth, mealController.getMeals);
 route.post('/meals/', auth, mealController.addMeal);
 route.patch('/meals/:id', auth, mealController.updateMeal);
 route.delete('meals/:id', auth, mealController.deleteMeal);
+route.get('/mess/summary', auth, massController.getMessSummary);
 
 export default route;

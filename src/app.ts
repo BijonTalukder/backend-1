@@ -4,6 +4,7 @@ import cors from 'cors';
 import { errorHandler } from './middlewares/errorHandler';
 import cookieParser from 'cookie-parser';
 import connectDB from './config/db';
+import { seedDefaultCategories, seedMessCategories } from './utils/seedCategories';
 
 const app: Application = express();
 
@@ -18,11 +19,14 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+seedDefaultCategories()
 
 // ✅ Connect DB before every request (cached — only connects once)
 app.use(async (_req: Request, _res: Response, next: NextFunction) => {
   try {
     await connectDB();
+    // await seedDefaultCategories()
+    // await seedMessCategories()
     next();
   } catch (err) {
     next(err);
