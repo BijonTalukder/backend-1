@@ -10,6 +10,7 @@ import { transactionController } from '../controllers/transaction.controller';
 import { businessMembersController } from '../controllers/business-member.controller';
 import { mealController } from '../controllers/meal.controller';
 import { massController } from '../controllers/mass.controller';
+import { businessInvoicesController } from '../controllers/invoice.controller';
 
 const route: Router = express.Router();
 
@@ -162,5 +163,23 @@ route.post('/meals/', auth, mealController.addMeal);
 route.patch('/meals/:id', auth, mealController.updateMeal);
 route.delete('meals/:id', auth, mealController.deleteMeal);
 route.get('/mess/summary', auth, massController.getMessSummary);
-
+route.post(
+  '/invoices/:businessId/generate',
+  businessInvoicesController.generateInvoice,
+);
+route.get(
+  '/invoices/:businessId',
+  auth,
+  businessInvoicesController.listInvoices,
+);
+route.get(
+  '/invoices/:businessId/:invoiceId',
+  auth,
+  businessInvoicesController.getInvoice,
+);
+route.delete(
+  '/invoices/:businessId/:invoiceId',
+  auth,
+  businessInvoicesController.deleteInvoice,
+);
 export default route;
