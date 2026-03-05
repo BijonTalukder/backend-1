@@ -40,7 +40,7 @@ const generateInvoice = asyncHandler(async (req: Request, res) => {
   const { businessId } = req.params;
   const { month, year, mealCategoryId } = req.body;
   const userId = req.user?._id;
-
+  console.log(businessId, userId)
   if (
     !businessId ||
     Array.isArray(businessId) ||

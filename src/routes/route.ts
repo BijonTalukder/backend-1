@@ -164,7 +164,7 @@ route.patch('/meals/:id', auth, mealController.updateMeal);
 route.delete('meals/:id', auth, mealController.deleteMeal);
 route.get('/mess/summary', auth, massController.getMessSummary);
 route.post(
-  '/invoices/:businessId/generate',
+  '/invoices/:businessId/generate', auth,
   businessInvoicesController.generateInvoice,
 );
 route.get(

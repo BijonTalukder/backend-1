@@ -28,6 +28,8 @@ export const auth = asyncHandler(
       throw new ApiError(401, 'Unauthorized: Invalid token payload');
     }
 
+    console.log("invoice user", decoded)
+
     req.user = {
       // ✅ এখন error আসবে না
       _id: decoded.id.toString(),
