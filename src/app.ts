@@ -11,7 +11,7 @@ const app: Application = express();
 app.use(cookieParser());
 app.use( //https://cashbook-frontend-wine.vercel.app
   cors({
-    origin: 'http://localhost:5173',
+    origin: 'https://cashbook-frontend-wine.vercel.app',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
