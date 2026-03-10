@@ -11,6 +11,7 @@ import { businessMembersController } from '../controllers/business-member.contro
 import { mealController } from '../controllers/meal.controller';
 import { massController } from '../controllers/mass.controller';
 import { businessInvoicesController } from '../controllers/invoice.controller';
+import { aiChat } from '../controllers/ai.controller';
 
 const route: Router = express.Router();
 
@@ -182,4 +183,5 @@ route.delete(
   auth,
   businessInvoicesController.deleteInvoice,
 );
+route.post('/ai/chat', auth, aiChat)
 export default route;
