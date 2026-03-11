@@ -23,16 +23,29 @@ interface AITransaction {
   note?: string;
 }
 
-/* ───────── JSON Extract (Robust) ───────── */
+interface IBizLean {
+  _id: Types.ObjectId;
+  name: string;
+  type: string;
+  currency?: string;
+}
 
-const extractJSON = (text: string) => {
+interface GeminiPart {
+  text?: string;
+}
+interface GeminiError {
+  error?: { message?: string };
+}
+
+/* ───────── JSON Extract ───────── */
+
+const extractJSON = (text: string): AITransaction | null => {
   try {
     const cleaned = text.replace(/```json|```/g, '').trim();
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
-    const jsonStr = cleaned.slice(start, end + 1);
-    return JSON.parse(jsonStr);
+    return JSON.parse(cleaned.slice(start, end + 1)) as AITransaction;
   } catch {
     return null;
   }
@@ -43,10 +56,9 @@ const extractJSON = (text: string) => {
 const detectSimpleTransaction = (text: string): AITransaction | null => {
   const amountMatch = text.match(/\d+/);
   if (!amountMatch) return null;
-
   const amount = Number(amountMatch[0]);
 
-  if (/income|received|paichi|paisi|income hoice|income hoyeche/i.test(text)) {
+  if (/income|received|paichi|paisi|income hoice|income hoyeche/i.test(text))
     return {
       action: 'create_transaction',
       type: 'income',
@@ -54,9 +66,8 @@ const detectSimpleTransaction = (text: string): AITransaction | null => {
       category: 'Income',
       note: text,
     };
-  }
 
-  if (/bazar|khawa|khabo|expense|khoroce|spend|buy|kine/i.test(text)) {
+  if (/bazar|khawa|khabo|expense|khoroce|spend|buy|kine/i.test(text))
     return {
       action: 'create_transaction',
       type: 'expense',
@@ -64,7 +75,6 @@ const detectSimpleTransaction = (text: string): AITransaction | null => {
       category: 'Food',
       note: text,
     };
-  }
 
   return null;
 };
@@ -79,21 +89,20 @@ const buildBusinessContext = async (businessId: string, userId: string) => {
     user: userId,
     status: true,
   });
-
   if (!membership) throw new ApiError(403, 'Access denied');
 
-  const business = await Business.findById(bizId).lean();
+  const business = (await Business.findById(bizId).lean()) as IBizLean | null;
   if (!business) throw new ApiError(404, 'Business not found');
 
-  const categories = await TransactionCategory.find({ business: bizId }).select(
-    'name',
-  );
-
+  const currency = business.currency ?? '৳';
+  const categories = await TransactionCategory.find({ business: bizId })
+    .select('name')
+    .lean();
   const categoryNames = categories.map((c) => c.name).join(', ') || 'None';
 
-  const currency = business.currency ?? '৳';
-  const transactions = await Transaction.find({ business: bizId }).limit(50);
-
+  const transactions = await Transaction.find({ business: bizId })
+    .limit(50)
+    .lean();
   let income = 0,
     expense = 0;
   for (const t of transactions) {
@@ -102,13 +111,7 @@ const buildBusinessContext = async (businessId: string, userId: string) => {
   }
 
   return {
-    text: `
-Business: ${business.name}
-Categories: ${categoryNames}
-Income: ${currency}${income}
-Expense: ${currency}${expense}
-Net: ${currency}${income - expense}
-`,
+    text: `Business: ${business.name}\nCategories: ${categoryNames}\nIncome: ${currency}${income}\nExpense: ${currency}${expense}\nNet: ${currency}${income - expense}`,
     categoryList: categoryNames,
   };
 };
@@ -125,7 +128,6 @@ const createTransactionFromAI = async (
     name: { $regex: aiData.category, $options: 'i' },
   });
 
-  // Auto-create category if missing
   if (!category) {
     category = await TransactionCategory.create({
       business: businessId,
@@ -135,7 +137,7 @@ const createTransactionFromAI = async (
     });
   }
 
-  return await Transaction.create({
+  return Transaction.create({
     business: businessId,
     type: aiData.type,
     amount: aiData.amount,
@@ -157,7 +159,6 @@ const createTransactionFromAI = async (
 
 export const aiChat = asyncHandler(async (req: Request, res) => {
   const userId = req.user?._id;
-
   const { businessId, messages } = req.body as {
     businessId: string;
     messages: Message[];
@@ -169,41 +170,34 @@ export const aiChat = asyncHandler(async (req: Request, res) => {
     throw new ApiError(400, 'messages required');
 
   const lastMessage = messages[messages.length - 1].content;
-
-  // 1️⃣ Quick detect
-  const quickTx = detectSimpleTransaction(lastMessage);
   let reply = '';
   let tx = null;
 
+  /* 1️⃣ Quick detect — no AI call needed */
+  const quickTx = detectSimpleTransaction(lastMessage);
+
   if (quickTx) {
     tx = await createTransactionFromAI(quickTx, businessId, String(userId));
-    reply = `Transaction created: ${quickTx.amount}৳ (${quickTx.type})`;
+    reply = `✅ Transaction recorded: ${quickTx.amount}৳ (${quickTx.type})`;
   } else {
-    // 2️⃣ AI Generate JSON
+    /* 2️⃣ Gemini */
     const context = await buildBusinessContext(businessId, String(userId));
 
-    const systemPrompt = `
-You are "HisabBoi AI", a bookkeeping assistant.
-If user mentions income or expense, respond ONLY with JSON.
-Example:
-User: আজ বাজার 500 টাকা
-{
- "action":"create_transaction",
- "type":"expense",
- "amount":500,
- "category":"Food",
- "note":"বাজার"
-}
+    const systemPrompt = `You are "HisabBoi AI", a bookkeeping assistant.
+If user mentions creating income or expense, respond ONLY with JSON:
+{"action":"create_transaction","type":"expense","amount":500,"category":"Food","note":"বাজার"}
 Available Categories: ${context.categoryList}
-Business Summary: ${context.text}
-`;
+Business Summary:
+${context.text}
+Otherwise reply conversationally in Bangla.`;
 
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    if (!apiKey) throw new ApiError(500, 'AI service not configured');
+    const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
 
     const geminiMessages = [
       { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: 'ঠিক আছে' }] },
+      { role: 'model', parts: [{ text: 'ঠিক আছে, আমি সাহায্য করব।' }] },
       ...messages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
@@ -223,32 +217,33 @@ Business Summary: ${context.text}
     );
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
+      const err = (await response.json().catch(() => ({}))) as GeminiError;
       throw new ApiError(
         502,
         `AI error: ${err?.error?.message ?? response.statusText}`,
       );
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      candidates?: { content?: { parts?: GeminiPart[] } }[];
+    };
+
     reply =
       data?.candidates?.[0]?.content?.parts
-        ?.map((p: any) => p.text)
-        ?.join('') ?? '';
+        ?.map((p) => p.text ?? '')
+        .join('') ?? '';
 
     const json = extractJSON(reply);
-    if (json && json.action === 'create_transaction') {
+    if (json?.action === 'create_transaction') {
       tx = await createTransactionFromAI(json, businessId, String(userId));
+      reply = `✅ Transaction recorded: ${json.amount}৳ (${json.type}) — ${json.category}`;
     }
   }
 
-  // 3️⃣ Send response
   sendResponse(res, {
     statusCode: tx ? 201 : 200,
-    message: tx ? 'Transaction recorded successfully' : 'ok',
-    data: {
-      reply,
-      transaction: tx,
-    },
+    success: true,
+    message: tx ? 'Transaction recorded successfully' : 'OK',
+    data: { reply, transaction: tx ?? null },
   });
 });
