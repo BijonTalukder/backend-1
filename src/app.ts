@@ -4,14 +4,18 @@ import cors from 'cors';
 import { errorHandler } from './middlewares/errorHandler';
 import cookieParser from 'cookie-parser';
 import connectDB from './config/db';
-import { seedDefaultCategories, seedMessCategories } from './utils/seedCategories';
+import {
+  seedDefaultCategories,
+  seedMessCategories,
+} from './utils/seedCategories';
 
 const app: Application = express();
 
 app.use(cookieParser());
-app.use( //https://cashbook-frontend-wine.vercel.app
+app.use(
+  //https://cashbook-frontend-wine.vercel.app
   cors({
-    origin: 'https://cashbook-frontend-wine.vercel.app',
+    origin: 'http://localhost:5173',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -19,7 +23,7 @@ app.use( //https://cashbook-frontend-wine.vercel.app
 );
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-seedDefaultCategories()
+seedDefaultCategories();
 
 // ✅ Connect DB before every request (cached — only connects once)
 app.use(async (_req: Request, _res: Response, next: NextFunction) => {

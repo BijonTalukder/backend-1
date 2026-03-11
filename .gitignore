@@ -1,3 +1,11 @@
-node_modules
-dist
+# Node modules
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
 .env
+.env.local
+.env.*   # optionally ignore all .env.* files
+env/
