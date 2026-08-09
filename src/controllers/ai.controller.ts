@@ -81,6 +81,27 @@ const detectSimpleTransaction = (text: string): AITransaction | null => {
 
 /* ───────── Build Context ───────── */
 
+interface TxThin {
+  type: 'income' | 'expense' | 'transfer';
+  amount: number;
+  date: Date;
+  note?: string;
+  category: Types.ObjectId;
+  _id: Types.ObjectId;
+}
+
+const MONEY = (n: number, c: string) => `${c}${n.toLocaleString('en-IN')}`;
+
+const pctChange = (cur: number, prev: number) =>
+  prev === 0 ? 'N/A' : `${cur > prev ? '+' : ''}${(((cur - prev) / prev) * 100).toFixed(1)}%`;
+
+interface CategorySpend {
+  name: string;
+  amount: number;
+  count: number;
+}
+type CategoryAgg = CategorySpend;
+
 const buildBusinessContext = async (businessId: string, userId: string) => {
   const bizId = new Types.ObjectId(businessId);
 
@@ -94,24 +115,95 @@ const buildBusinessContext = async (businessId: string, userId: string) => {
   const business = (await Business.findById(bizId).lean()) as IBizLean | null;
   if (!business) throw new ApiError(404, 'Business not found');
 
-  const currency = business.currency ?? '৳';
+  const currency = business.currency === 'BDT' ? '৳' : (business.currency ?? '৳');
   const categories = await TransactionCategory.find({ business: bizId })
     .select('name')
     .lean();
   const categoryNames = categories.map((c) => c.name).join(', ') || 'None';
+  const catNameMap = new Map(categories.map((c) => [String(c._id), c.name]));
 
-  const transactions = await Transaction.find({ business: bizId })
-    .limit(50)
-    .lean();
-  let income = 0,
-    expense = 0;
-  for (const t of transactions) {
-    if (t.type === 'income') income += t.amount;
-    if (t.type === 'expense') expense += t.amount;
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const [thisMonthTx, lastMonthTx, recentTx] = (await Promise.all([
+    Transaction.find({
+      business: bizId,
+      date: { $gte: currentMonthStart, $lt: currentMonthEnd },
+    })
+      .select('type amount date note category')
+      .lean(),
+    Transaction.find({
+      business: bizId,
+      date: { $gte: lastMonthStart, $lt: currentMonthStart },
+    })
+      .select('type amount date note category')
+      .lean(),
+    Transaction.find({ business: bizId })
+      .sort({ date: -1 })
+      .limit(5)
+      .select('date amount type note category')
+      .lean(),
+  ])) as unknown as [TxThin[], TxThin[], TxThin[]];
+
+  const sumBy = (rows: TxThin[]) =>
+    rows.reduce(
+      (acc, t) => {
+        if (t.type === 'income') acc.income += t.amount;
+        else if (t.type === 'expense') acc.expense += t.amount;
+        return acc;
+      },
+      { income: 0, expense: 0 },
+    );
+
+  const thisAgg = sumBy(thisMonthTx);
+  const lastAgg = sumBy(lastMonthTx);
+
+  const catSpend = new Map<string, { amount: number; count: number }>();
+  for (const t of thisMonthTx) {
+    if (t.type !== 'expense') continue;
+    const id = String(t.category);
+    const cur = catSpend.get(id) ?? { amount: 0, count: 0 };
+    cur.amount += t.amount;
+    cur.count += 1;
+    catSpend.set(id, cur);
   }
+  const topCats: CategoryAgg[] = [...catSpend.entries()]
+    .map(([id, v]) => ({ name: catNameMap.get(id) ?? 'Other', ...v }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  const text = [
+    `Business: ${business.name} (${business.type})`,
+    `Currency: ${currency}`,
+    `Available Categories: ${categoryNames}`,
+    '',
+    '=== THIS MONTH SUMMARY ===',
+    `Income: ${MONEY(thisAgg.income, currency)}`,
+    `Expense: ${MONEY(thisAgg.expense, currency)}`,
+    `Net: ${MONEY(thisAgg.income - thisAgg.expense, currency)}`,
+    '',
+    '=== LAST MONTH SUMMARY ===',
+    `Income: ${MONEY(lastAgg.income, currency)}`,
+    `Expense: ${MONEY(lastAgg.expense, currency)}`,
+    `Income change: ${pctChange(thisAgg.income, lastAgg.income)}`,
+    `Expense change: ${pctChange(thisAgg.expense, lastAgg.expense)}`,
+    '',
+    '=== TOP EXPENSE CATEGORIES THIS MONTH ===',
+    ...(topCats.length
+      ? topCats.map((c) => `- ${c.name}: ${MONEY(c.amount, currency)} (${c.count} tx)`)
+      : ['- None this month']),
+    '',
+    '=== RECENT TRANSACTIONS ===',
+    ...recentTx.map(
+      (t) =>
+        `- ${new Date(t.date).toLocaleDateString('en-GB')} | ${t.type} | ${t.note || catNameMap.get(String(t.category)) || ''} | ${MONEY(t.amount, currency)}`,
+    ),
+  ].join('\n');
 
   return {
-    text: `Business: ${business.name}\nCategories: ${categoryNames}\nIncome: ${currency}${income}\nExpense: ${currency}${expense}\nNet: ${currency}${income - expense}`,
+    text,
     categoryList: categoryNames,
   };
 };
@@ -183,17 +275,31 @@ export const aiChat = asyncHandler(async (req: Request, res) => {
     /* 2️⃣ Gemini */
     const context = await buildBusinessContext(businessId, String(userId));
 
-    const systemPrompt = `You are "HisabBoi AI", a bookkeeping assistant.
-If user mentions creating income or expense, respond ONLY with JSON:
-{"action":"create_transaction","type":"expense","amount":500,"category":"Food","note":"বাজার"}
-Available Categories: ${context.categoryList}
-Business Summary:
+    const systemPrompt = `You are "HisabBoi AI", a bookkeeping assistant for business financial data in Bangladesh.
+
+Context data:
 ${context.text}
-Otherwise reply conversationally in Bangla.`;
+
+= Instructions =
+1. If the user wants to CREATE an income or expense transaction, respond with ONLY this JSON (no other text):
+{"action":"create_transaction","type":"expense","amount":500,"category":"Food","note":"বাজার"}
+Category must be one of the Available Categories listed above. amount = number only.
+2. Otherwise reply in Bangla (unless the user writes in English). Be informative and analytical:
+   - Use simple bullet points (with '-' or '*') to structure answers.
+   - Quote exact amounts in the currency shown above.
+   - Refer to totals, month-over-month changes, and top expense categories from the context when relevant.
+   - Compare THIS MONTH vs LAST MONTH using the provided summaries.
+   - Mention transaction dates from RECENT TRANSACTIONS when useful.
+   - Highlight the most important insights first, then details.
+   - If the context does not contain the needed data, say so honestly and suggest what to check.
+3. Do not invent numbers that are not in the context.`;
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new ApiError(500, 'AI service not configured');
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-pro';
+    // gemini-2.5-pro gives noticeably better analysis but has a stricter free-tier
+    // rate limit than flash — fall back automatically so users still get an answer.
+    const fallbackModel = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash';
 
     const geminiMessages = [
       { role: 'user', parts: [{ text: systemPrompt }] },
@@ -204,17 +310,31 @@ Otherwise reply conversationally in Bangla.`;
       })),
     ];
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: geminiMessages,
-          generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
-        }),
-      },
-    );
+    const callGemini = async (modelName: string) => {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: geminiMessages,
+            generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+          }),
+        },
+      );
+      return res;
+    };
+
+    let response = await callGemini(model);
+
+    // Rate-limited or momentarily overloaded → retry once on the cheaper fallback model.
+    if (
+      !response.ok &&
+      (response.status === 429 || response.status === 503) &&
+      fallbackModel !== model
+    ) {
+      response = await callGemini(fallbackModel);
+    }
 
     if (!response.ok) {
       const err = (await response.json().catch(() => ({}))) as GeminiError;

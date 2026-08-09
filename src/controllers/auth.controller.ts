@@ -89,6 +89,83 @@ const login = asyncHandler(async (req, res, next) => {
     },
   });
 });
+const updateProfile = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { firstName, lastName } = req.body;
+
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user');
+  }
+
+  const update: { firstName?: string; lastName?: string } = {};
+  if (firstName !== undefined) update.firstName = firstName;
+  if (lastName !== undefined) update.lastName = lastName;
+
+  if (Object.keys(update).length === 0) {
+    throw new ApiError(400, 'Nothing to update');
+  }
+
+  if (
+    (update.firstName !== undefined && !update.firstName.trim()) ||
+    (update.lastName !== undefined && !update.lastName.trim())
+  ) {
+    throw new ApiError(400, 'First name and last name are required');
+  }
+
+  const user = await User.findByIdAndUpdate(userId, update, {
+    new: true,
+    runValidators: true,
+  });
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Profile updated successfully',
+    data: user,
+  });
+});
+
+const changePassword = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!userId || !Types.ObjectId.isValid(String(userId))) {
+    throw new ApiError(400, 'Invalid user');
+  }
+
+  if (!currentPassword || !newPassword) {
+    throw new ApiError(400, 'Current password and new password are required');
+  }
+
+  if (newPassword.length < 8) {
+    throw new ApiError(400, 'Password must be at least 8 characters');
+  }
+
+  const user = await User.findById(userId).select('+password');
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (!(await user.comparePassword(currentPassword))) {
+    throw new ApiError(400, 'Current password is incorrect');
+  }
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  user.passwordChangedAt = new Date();
+  await user.save();
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Password changed successfully',
+    data: null,
+  });
+});
+
 const deleteAccount = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
@@ -146,5 +223,7 @@ const deleteAccount = asyncHandler(async (req, res) => {
 export const authController = {
   register,
   login,
+  updateProfile,
+  changePassword,
   deleteAccount,
 };

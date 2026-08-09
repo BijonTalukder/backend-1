@@ -17,6 +17,8 @@ const route: Router = express.Router();
 
 route.post('/auth/register', authController.register);
 route.post('/auth/login', authController.login);
+route.patch('/auth/profile', auth, authController.updateProfile);
+route.patch('/auth/change-password', auth, authController.changePassword);
 route.delete('/auth/account', auth, authController.deleteAccount);
 route.patch('/users/default-business', auth, userController.setDefaultBusiness);
 
