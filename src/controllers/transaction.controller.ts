@@ -158,6 +158,10 @@ const getBusinessTransactions = asyncHandler(
       startDate,
       endDate,
       settlementStatus,
+      customerId,
+      supplierId,
+      paymentMethod,
+      sourceType,
       page = '1',
       limit = '20',
     } = req.query as Record<string, string>;
@@ -170,6 +174,12 @@ const getBusinessTransactions = asyncHandler(
     if (memberId && Types.ObjectId.isValid(memberId))
       filter.member = new Types.ObjectId(memberId);
     if (settlementStatus) filter.settlementStatus = settlementStatus;
+    if (customerId && Types.ObjectId.isValid(customerId))
+      filter.customer = new Types.ObjectId(customerId);
+    if (supplierId && Types.ObjectId.isValid(supplierId))
+      filter.supplier = new Types.ObjectId(supplierId);
+    if (paymentMethod) filter.paymentMethod = paymentMethod;
+    if (sourceType) filter['source.type'] = sourceType;
     if (startDate || endDate) {
       filter.date = {};
       if (startDate) filter.date.$gte = new Date(startDate);
@@ -186,6 +196,8 @@ const getBusinessTransactions = asyncHandler(
         .populate('member', 'firstName lastName email avatar')
         .populate('toMember', 'firstName lastName email')
         .populate('paidFor.member', 'firstName lastName email')
+        .populate('customer', 'name phone')
+        .populate('supplier', 'name phone')
         .sort({ date: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)

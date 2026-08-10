@@ -47,6 +47,15 @@ export interface ITransaction extends Document {
   linkedTransaction?: mongoose.Types.ObjectId; // adjustment এর জন্য
   isAdjustment: boolean;
 
+  // ─── Business Mode ──────────────────────────────
+  paymentMethod?: 'cash' | 'bank' | 'bkash' | 'nagad' | 'other';
+  customer?: mongoose.Types.ObjectId | null;
+  supplier?: mongoose.Types.ObjectId | null;
+  source?: {
+    type: 'sale' | 'purchase' | 'expense' | 'payment';
+    id: mongoose.Types.ObjectId;
+  } | null;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -146,6 +155,30 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
     isAdjustment: {
       type: Boolean,
       default: false,
+    },
+
+    // Business Mode
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'bank', 'bkash', 'nagad', 'other'],
+    },
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
+      default: null,
+    },
+    supplier: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Supplier',
+      default: null,
+    },
+    source: {
+      type: {
+        type: { type: String, enum: ['sale', 'purchase', 'expense', 'payment'] },
+        id: { type: mongoose.Schema.Types.ObjectId },
+      },
+      default: null,
+      _id: false,
     },
   },
   { timestamps: true, versionKey: false },

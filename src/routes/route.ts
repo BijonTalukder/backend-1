@@ -12,6 +12,15 @@ import { mealController } from '../controllers/meal.controller';
 import { massController } from '../controllers/mass.controller';
 import { businessInvoicesController } from '../controllers/invoice.controller';
 import { aiChat } from '../controllers/ai.controller';
+import { dashboardController } from '../controllers/dashboard.controller';
+import { customerController } from '../controllers/customer.controller';
+import { supplierController } from '../controllers/supplier.controller';
+import { productController } from '../controllers/product.controller';
+import { saleController } from '../controllers/sale.controller';
+import { purchaseController } from '../controllers/purchase.controller';
+import { expenseController } from '../controllers/expense.controller';
+import { paymentController } from '../controllers/payment.controller';
+import { reportController } from '../controllers/report.controller';
 
 const route: Router = express.Router();
 
@@ -31,6 +40,71 @@ route.post(
   auth,
   businessController.completeOnboarding,
 );
+route.get(
+  '/dashboard/:businessId',
+  auth,
+  dashboardController.getBusinessSummary,
+);
+
+// ── Customers (Business Mode) ─────────────────────────
+route.post('/customers', auth, customerController.createCustomer);
+route.get(
+  '/customers/business/:businessId',
+  auth,
+  customerController.getCustomers,
+);
+route.get('/customers/:id', auth, customerController.getCustomer);
+route.patch('/customers/:id', auth, customerController.updateCustomer);
+route.delete('/customers/:id', auth, customerController.deleteCustomer);
+
+// ── Suppliers (Business Mode) ─────────────────────────
+route.post('/suppliers', auth, supplierController.createSupplier);
+route.get(
+  '/suppliers/business/:businessId',
+  auth,
+  supplierController.getSuppliers,
+);
+route.get('/suppliers/:id', auth, supplierController.getSupplier);
+route.patch('/suppliers/:id', auth, supplierController.updateSupplier);
+route.delete('/suppliers/:id', auth, supplierController.deleteSupplier);
+
+// ── Products & Inventory (Business Mode) ──────────────
+route.post('/products', auth, productController.createProduct);
+route.get(
+  '/products/business/:businessId',
+  auth,
+  productController.getProducts,
+);
+route.get('/products/:id', auth, productController.getProduct);
+route.patch('/products/:id', auth, productController.updateProduct);
+route.post(
+  '/products/:id/adjust-stock',
+  auth,
+  productController.adjustProductStock,
+);
+route.delete('/products/:id', auth, productController.deleteProduct);
+
+// ── Sales (Business Mode) ─────────────────────────────
+route.post('/sales', auth, saleController.createSale);
+route.get('/sales/business/:businessId', auth, saleController.getSales);
+route.get('/sales/:id', auth, saleController.getSale);
+
+// ── Purchases (Business Mode) ─────────────────────────
+route.post('/purchases', auth, purchaseController.createPurchase);
+route.get('/purchases/business/:businessId', auth, purchaseController.getPurchases);
+route.get('/purchases/:id', auth, purchaseController.getPurchase);
+
+// ── Expenses (Business Mode) ──────────────────────────
+route.post('/expenses', auth, expenseController.createExpense);
+route.get('/expenses/business/:businessId', auth, expenseController.getExpenses);
+
+// ── Payments (Business Mode) ──────────────────────────
+route.post('/payments/receive', auth, paymentController.receivePayment);
+route.post('/payments/pay', auth, paymentController.makePayment);
+route.get('/payments/business/:businessId', auth, paymentController.getPayments);
+
+// ── Reports (Business Mode) ───────────────────────────
+route.get('/reports/profit-loss/:businessId', auth, reportController.getProfitLoss);
 //category
 route.post('/categories', auth, categoryController.createCategory);
 route.get('/categories', auth, categoryController.getAllCategories);

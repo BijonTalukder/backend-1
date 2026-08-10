@@ -29,7 +29,7 @@ const getMessSummary = async (req: Request, res: Response) => {
 
         // Check access
         const myMembership = await BusinessMembersModel.findOne({
-            user: userId, business: businessId, isActive: true,
+            user: userId, business: businessId, status: true,
         });
         if (!myMembership) return res.status(403).json({ message: 'Access denied' });
 
@@ -41,7 +41,7 @@ const getMessSummary = async (req: Request, res: Response) => {
 
         // All active members
         const members = await BusinessMembersModel.find({
-            business: businessId, isActive: true,
+            business: businessId, status: true,
         }).populate('user', 'firstName lastName email').lean();
 
         const memberCount = members.length;

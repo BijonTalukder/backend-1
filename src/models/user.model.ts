@@ -23,6 +23,7 @@ export interface IUser extends Document {
   isActive: boolean;
   lastLogin?: Date;
   avatar?: string;
+  defaultBusiness?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
   onboardingCompleted: boolean;
@@ -90,6 +91,11 @@ const userSchema = new mongoose.Schema<IUser>(
     },
     avatar: {
       type: String,
+    },
+    defaultBusiness: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Business',
+      default: null,
     },
   },
   {

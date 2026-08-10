@@ -1,4 +1,5 @@
 // utils/seedCategories.ts
+import mongoose from 'mongoose';
 import TransactionCategory from '../models/transaction-category.model';
 
 export const seedDefaultCategories = async () => {
@@ -75,4 +76,42 @@ export const seedMessCategories = async (businessId: string) => {
 
   await TransactionCategory.insertMany(messCategories);
   console.log(`✅ Mess categories seeded for business ${businessId}`);
+};
+
+/* ─────────────────────────────────────────────────────────
+   Business-mode (shop/retail) categories
+   Call this after creating a new "business" type Business:
+   await seedBusinessCategories(businessId)
+───────────────────────────────────────────────────────── */
+export const seedBusinessCategories = async (
+  businessId: string,
+  session?: mongoose.ClientSession,
+) => {
+  const existing = await TransactionCategory.countDocuments({ business: businessId }).session(
+    session ?? null,
+  );
+  if (existing > 0) return;
+
+  const businessCategories = [
+    // ── Income ───────────────────────────────────────
+    { name: 'Sales Revenue', type: 'income', group: 'business', icon: '🧾', business: businessId },
+    { name: 'Other Income', type: 'income', group: 'other', icon: '➕', business: businessId },
+
+    // ── Cost of goods ─────────────────────────────────
+    { name: 'Purchase Cost', type: 'expense', group: 'business', icon: '📦', business: businessId },
+
+    // ── Operating expenses ────────────────────────────
+    { name: 'Rent', type: 'expense', group: 'housing', icon: '🏠', business: businessId },
+    { name: 'Electricity', type: 'expense', group: 'utility', icon: '⚡', business: businessId },
+    { name: 'Internet', type: 'expense', group: 'utility', icon: '📶', business: businessId },
+    { name: 'Salary', type: 'expense', group: 'salary', icon: '👷', business: businessId },
+    { name: 'Transport', type: 'expense', group: 'transport', icon: '🚚', business: businessId },
+    { name: 'Marketing', type: 'expense', group: 'business', icon: '📣', business: businessId },
+    { name: 'Office Supplies', type: 'expense', group: 'business', icon: '🗂️', business: businessId },
+    { name: 'Maintenance', type: 'expense', group: 'housing', icon: '🔧', business: businessId },
+    { name: 'Other Expense', type: 'expense', group: 'other', icon: '📌', business: businessId },
+  ];
+
+  await TransactionCategory.insertMany(businessCategories, { session: session ?? undefined });
+  console.log(`✅ Business categories seeded for business ${businessId}`);
 };
