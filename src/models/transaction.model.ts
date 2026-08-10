@@ -73,6 +73,17 @@ const paidForSchema = new mongoose.Schema<IPaidFor>(
   { _id: false },
 );
 
+const sourceSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['sale', 'purchase', 'expense', 'payment'],
+    },
+    id: { type: mongoose.Schema.Types.ObjectId },
+  },
+  { _id: false },
+);
+
 const transactionSchema = new mongoose.Schema<ITransaction>(
   {
     business: {
@@ -173,12 +184,8 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
       default: null,
     },
     source: {
-      type: {
-        type: { type: String, enum: ['sale', 'purchase', 'expense', 'payment'] },
-        id: { type: mongoose.Schema.Types.ObjectId },
-      },
+      type: sourceSchema,
       default: null,
-      _id: false,
     },
   },
   { timestamps: true, versionKey: false },
