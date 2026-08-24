@@ -10,6 +10,40 @@ import ApiError from '../Error/handleApiError';
 import sendEmail from '../utils/sendEmail';
 import { inviteEmailTemplate } from '../utils/template/emailTemplates';
 
+/* ─── Helpers ─────────────────────────────────────────── */
+const buildInviteLink = (token: string) =>
+  `${(process.env.FRONTEND_URL ?? '').replace(/\/+$/, '')}/invite/${token}`;
+
+/**
+ * Invite emails are best-effort: a broken/rate-limited SMTP box must never
+ * throw away an invitation that was already created. We swallow the error and
+ * report delivery status so the client can fall back to sharing the link.
+ */
+const trySendInviteEmail = async (opts: {
+  to: string;
+  inviterName: string;
+  businessName: string;
+  role: string;
+  inviteLink: string;
+}): Promise<boolean> => {
+  try {
+    await sendEmail({
+      to: opts.to,
+      subject: `${opts.inviterName} invited you to join ${opts.businessName} on CashBook`,
+      html: inviteEmailTemplate({
+        inviterName: opts.inviterName,
+        businessName: opts.businessName,
+        role: opts.role,
+        inviteLink: opts.inviteLink,
+      }),
+    });
+    return true;
+  } catch (err) {
+    console.error('[invitation] email delivery failed:', err);
+    return false;
+  }
+};
+
 /* ─── Send Invitation ─────────────────────────────────── */
 const sendInvitation = asyncHandler(async (req: Request, res, next) => {
   const { businessId } = req.params;
@@ -53,26 +87,31 @@ const sendInvitation = asyncHandler(async (req: Request, res, next) => {
     if (alreadyMember) throw new ApiError(400, 'This user is already a member');
   }
 
-  // ✅ check existing pending invite
+  // ✅ reuse an existing pending invite instead of erroring out — otherwise a
+  // failed email leaves the admin stuck with no link and no way to re-issue one
   const existingInvite = await Invitation.findOne({
     business: objectBusinessId,
     email: email.toLowerCase(),
     status: 'pending',
     expiresAt: { $gt: new Date() },
   });
-  if (existingInvite)
-    throw new ApiError(
-      400,
-      'A pending invitation already exists for this email',
-    );
 
-  // ✅ create invitation
-  const invitation = await Invitation.create({
-    business: objectBusinessId,
-    invitedBy: objectUserId,
-    email: email.toLowerCase(),
-    role,
-  });
+  const reused = Boolean(existingInvite);
+
+  const invitation =
+    existingInvite ??
+    (await Invitation.create({
+      business: objectBusinessId,
+      invitedBy: objectUserId,
+      email: email.toLowerCase(),
+      role,
+    }));
+
+  // keep the role in sync if the admin re-invited with a different one
+  if (existingInvite && existingInvite.role !== role) {
+    existingInvite.role = role;
+    await existingInvite.save();
+  }
 
   // ✅ fetch business + inviter details for email
   const [business, inviter] = await Promise.all([
@@ -82,29 +121,31 @@ const sendInvitation = asyncHandler(async (req: Request, res, next) => {
 
   if (!business || !inviter) throw new ApiError(500, 'Failed to fetch details');
 
-  const inviteLink = `${process.env.FRONTEND_URL}/invite/${invitation.token}`;
+  const inviteLink = buildInviteLink(invitation.token);
 
-  // ✅ send email
-  await sendEmail({
+  // ✅ best-effort email — never fails the request
+  const emailSent = await trySendInviteEmail({
     to: email,
-    subject: `${inviter.firstName} invited you to join ${business.name} on CashBook`,
-    html: inviteEmailTemplate({
-      inviterName: `${inviter.firstName} ${inviter.lastName}`,
-      businessName: business.name,
-      role,
-      inviteLink,
-    }),
+    inviterName: `${inviter.firstName} ${inviter.lastName}`,
+    businessName: business.name,
+    role,
+    inviteLink,
   });
 
   sendResponse(res, {
-    statusCode: 201,
+    statusCode: reused ? 200 : 201,
     success: true,
-    message: `Invitation sent to ${email}`,
+    message: emailSent
+      ? `Invitation sent to ${email}`
+      : `Invitation created for ${email}, but the email could not be delivered. Share the link instead.`,
     data: {
+      invitationId: invitation._id,
       inviteLink,
       token: invitation.token,
       email,
       role,
+      emailSent,
+      reused,
       expiresAt: invitation.expiresAt,
     },
   });
@@ -282,11 +323,23 @@ const getSentInvitations = asyncHandler(async (req: Request, res, next) => {
     .sort({ createdAt: -1 })
     .lean();
 
+  const now = new Date();
+
+  // expose the shareable link for invites that are still usable, so an admin
+  // can re-copy it (WhatsApp, SMS, …) when the email never arrived
+  const withLinks = invitations.map((inv) => ({
+    ...inv,
+    inviteLink:
+      inv.status === 'pending' && new Date(inv.expiresAt) > now
+        ? buildInviteLink(inv.token)
+        : undefined,
+  }));
+
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: 'Sent invitations fetched',
-    data: invitations,
+    data: withLinks,
   });
 });
 
