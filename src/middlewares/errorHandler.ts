@@ -8,6 +8,16 @@ export const errorHandler = (
 ) => {
   // ✅ MongoDB duplicate key error
   if (err.code === 11000) {
+    // Two attempts at the same offline operation raced. The winner already
+    // recorded it, so tell the client to retry — the replay guard will hand
+    // back the original result rather than creating a duplicate.
+    if (err.keyValue && 'operationId' in err.keyValue) {
+      return res.status(409).json({
+        success: false,
+        message: 'This operation is already being processed',
+      });
+    }
+
     const field = Object.keys(err.keyValue ?? {})[0];
     const fieldMap: Record<string, string> = {
       email: 'This email is already registered',

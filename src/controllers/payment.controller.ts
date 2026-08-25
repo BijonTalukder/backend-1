@@ -10,6 +10,12 @@ import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
 import { recordLedgerEntry, balanceDeltaFor } from '../utils/ledger';
+import {
+  claimOperation,
+  findReplay,
+  parseClientObjectId,
+  parseOperationId,
+} from '../utils/idempotency';
 
 const findOrCreatePaymentCategory = async (
   businessId: Types.ObjectId,
@@ -30,10 +36,30 @@ const findOrCreatePaymentCategory = async (
 
 const receivePayment = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
-  const { businessId, customerId, amount, method = 'cash', note, date } = req.body;
+  const {
+    businessId, customerId, amount, method = 'cash', note, date,
+    clientId, operationId,
+  } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
 
   await requireMembership(objectBusinessId!, objectUserId);
+
+  const clientPaymentId = parseClientObjectId(clientId, 'payment id');
+  const syncOperationId = parseOperationId(operationId);
+  if (syncOperationId && !clientPaymentId) {
+    throw new ApiError(400, 'clientId is required when operationId is sent');
+  }
+
+  // Replay of a queued offline receipt — never credit the customer twice.
+  const replayedId = await findReplay(Payment, objectBusinessId!, syncOperationId);
+  if (replayedId) {
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Payment already recorded',
+      data: await Payment.findById(replayedId),
+    });
+  }
 
   if (!customerId || !Types.ObjectId.isValid(customerId)) {
     throw new ApiError(400, 'A valid customer is required');
@@ -59,6 +85,7 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
       const created = await Payment.create(
         [
           {
+            ...(clientPaymentId ? { _id: clientPaymentId } : {}),
             business: objectBusinessId,
             direction: 'in',
             partyType: 'customer',
@@ -103,6 +130,17 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
         { $inc: { totalPaid: parsedAmount, totalDue: -parsedAmount } },
         { session },
       );
+
+      await claimOperation(
+        {
+          business: objectBusinessId!,
+          operationId: syncOperationId,
+          entityType: 'payment',
+          entity: payment._id as Types.ObjectId,
+          createdBy: objectUserId,
+        },
+        session,
+      );
     });
   } finally {
     await session.endSession();
@@ -118,10 +156,29 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
 
 const makePayment = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
-  const { businessId, supplierId, amount, method = 'cash', note, date } = req.body;
+  const {
+    businessId, supplierId, amount, method = 'cash', note, date,
+    clientId, operationId,
+  } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
 
   await requireMembership(objectBusinessId!, objectUserId);
+
+  const clientPaymentId = parseClientObjectId(clientId, 'payment id');
+  const syncOperationId = parseOperationId(operationId);
+  if (syncOperationId && !clientPaymentId) {
+    throw new ApiError(400, 'clientId is required when operationId is sent');
+  }
+
+  const replayedId = await findReplay(Payment, objectBusinessId!, syncOperationId);
+  if (replayedId) {
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Payment already recorded',
+      data: await Payment.findById(replayedId),
+    });
+  }
 
   if (!supplierId || !Types.ObjectId.isValid(supplierId)) {
     throw new ApiError(400, 'A valid supplier is required');
@@ -147,6 +204,7 @@ const makePayment = asyncHandler(async (req: Request, res) => {
       const created = await Payment.create(
         [
           {
+            ...(clientPaymentId ? { _id: clientPaymentId } : {}),
             business: objectBusinessId,
             direction: 'out',
             partyType: 'supplier',
@@ -190,6 +248,17 @@ const makePayment = asyncHandler(async (req: Request, res) => {
         supplier._id,
         { $inc: { totalPaid: parsedAmount, totalPayable: -parsedAmount } },
         { session },
+      );
+
+      await claimOperation(
+        {
+          business: objectBusinessId!,
+          operationId: syncOperationId,
+          entityType: 'payment',
+          entity: payment._id as Types.ObjectId,
+          createdBy: objectUserId,
+        },
+        session,
       );
     });
   } finally {

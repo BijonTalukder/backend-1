@@ -27,7 +27,10 @@ const connectDB = async () => {
   } catch (error) {
     cached.promise = null; // reset on failure so next call retries
     logger.error(`MongoDB connection error: ${error instanceof Error ? error.message : error}`);
-    process.exit(1);
+    // Surface the failure to the caller instead of killing the process — the
+    // per-request middleware (and /api/health) must be able to answer "database
+    // unavailable" so an offline client keeps its writes queued and retries.
+    throw error;
   }
 };
 

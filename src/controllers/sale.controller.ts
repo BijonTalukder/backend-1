@@ -12,6 +12,12 @@ import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
 import { adjustStock } from '../utils/inventory';
 import { recordLedgerEntry, balanceDeltaFor } from '../utils/ledger';
+import {
+  claimOperation,
+  findReplay,
+  parseClientObjectId,
+  parseOperationId,
+} from '../utils/idempotency';
 
 interface SaleItemInput {
   product: string;
@@ -24,6 +30,7 @@ const createSale = asyncHandler(async (req: Request, res) => {
   const {
     businessId, customerId, items, discount = 0, tax = 0,
     paidAmount = 0, paymentMethod = 'cash', note, date,
+    clientId, operationId,
   } = req.body as {
     businessId: string;
     customerId?: string;
@@ -34,10 +41,36 @@ const createSale = asyncHandler(async (req: Request, res) => {
     paymentMethod?: string;
     note?: string;
     date?: string;
+    clientId?: string;
+    operationId?: string;
   };
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
 
   await requireMembership(objectBusinessId!, objectUserId);
+
+  // ── Offline replay guard ─────────────────────────────
+  // A queued sale whose response never reached the client is retried with the
+  // same operationId. Return the sale that was already recorded rather than
+  // ringing it up (and decrementing stock) a second time.
+  const clientSaleId = parseClientObjectId(clientId, 'sale id');
+  const syncOperationId = parseOperationId(operationId);
+  if (syncOperationId && !clientSaleId) {
+    throw new ApiError(400, 'clientId is required when operationId is sent');
+  }
+
+  const replayedId = await findReplay(Sale, objectBusinessId!, syncOperationId);
+  if (replayedId) {
+    const replayed = await Sale.findById(replayedId)
+      .populate('customer', 'name phone')
+      .populate('items.product', 'name unit')
+      .lean();
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Sale already recorded',
+      data: replayed,
+    });
+  }
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new ApiError(400, 'At least one product is required');
@@ -118,6 +151,7 @@ const createSale = asyncHandler(async (req: Request, res) => {
       const created = await Sale.create(
         [
           {
+            ...(clientSaleId ? { _id: clientSaleId } : {}),
             business: objectBusinessId,
             invoiceNumber,
             customer: objectCustomerId,
@@ -170,6 +204,18 @@ const createSale = asyncHandler(async (req: Request, res) => {
           { session },
         );
       }
+
+      // Claimed inside the transaction so the claim and the sale commit together.
+      await claimOperation(
+        {
+          business: objectBusinessId!,
+          operationId: syncOperationId,
+          entityType: 'sale',
+          entity: sale._id as Types.ObjectId,
+          createdBy: objectUserId,
+        },
+        session,
+      );
     });
   } finally {
     await session.endSession();

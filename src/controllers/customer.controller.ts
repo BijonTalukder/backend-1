@@ -7,13 +7,39 @@ import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
+import {
+  claimOperation,
+  findReplay,
+  parseClientObjectId,
+  parseOperationId,
+} from '../utils/idempotency';
 
 const createCustomer = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
-  const { businessId, name, phone, email, address, openingBalance, notes } = req.body;
+  const {
+    businessId, name, phone, email, address, openingBalance, notes,
+    clientId, operationId,
+  } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
 
   await requireMembership(objectBusinessId!, objectUserId);
+
+  // Replay of a queued offline create — hand back the customer already stored.
+  const clientCustomerId = parseClientObjectId(clientId, 'customer id');
+  const syncOperationId = parseOperationId(operationId);
+  if (syncOperationId && !clientCustomerId) {
+    throw new ApiError(400, 'clientId is required when operationId is sent');
+  }
+
+  const replayedId = await findReplay(Customer, objectBusinessId!, syncOperationId);
+  if (replayedId) {
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Customer already created',
+      data: await Customer.findById(replayedId),
+    });
+  }
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     throw new ApiError(400, 'Customer name is required');
@@ -25,6 +51,7 @@ const createCustomer = asyncHandler(async (req: Request, res) => {
   }
 
   const customer = await Customer.create({
+    ...(clientCustomerId ? { _id: clientCustomerId } : {}),
     business: objectBusinessId,
     name: name.trim(),
     phone,
@@ -33,6 +60,14 @@ const createCustomer = asyncHandler(async (req: Request, res) => {
     notes,
     openingBalance: parsedOpeningBalance,
     totalDue: parsedOpeningBalance,
+    createdBy: objectUserId,
+  });
+
+  await claimOperation({
+    business: objectBusinessId!,
+    operationId: syncOperationId,
+    entityType: 'customer',
+    entity: customer._id as Types.ObjectId,
     createdBy: objectUserId,
   });
 

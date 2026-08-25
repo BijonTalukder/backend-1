@@ -1,22 +1,46 @@
 // controllers/product.controller.ts
 import { Request } from 'express';
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import Product from '../models/product.model';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
 import { adjustStock } from '../utils/inventory';
+import {
+  claimOperation,
+  findReplay,
+  parseClientObjectId,
+  parseOperationId,
+} from '../utils/idempotency';
 
 const createProduct = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
   const {
     businessId, name, sku, category,
     purchasePrice, sellingPrice, stock, minStock, unit, imageUrl,
+    clientId, operationId,
   } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
 
   await requireMembership(objectBusinessId!, objectUserId);
+
+  // Replay of a queued offline create — hand back the product already stored.
+  const clientProductId = parseClientObjectId(clientId, 'product id');
+  const syncOperationId = parseOperationId(operationId);
+  if (syncOperationId && !clientProductId) {
+    throw new ApiError(400, 'clientId is required when operationId is sent');
+  }
+
+  const replayedId = await findReplay(Product, objectBusinessId!, syncOperationId);
+  if (replayedId) {
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Product already created',
+      data: await Product.findById(replayedId),
+    });
+  }
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     throw new ApiError(400, 'Product name is required');
@@ -29,6 +53,7 @@ const createProduct = asyncHandler(async (req: Request, res) => {
   }
 
   const product = await Product.create({
+    ...(clientProductId ? { _id: clientProductId } : {}),
     business: objectBusinessId,
     name: name.trim(),
     sku,
@@ -39,6 +64,14 @@ const createProduct = asyncHandler(async (req: Request, res) => {
     minStock: parsedMinStock,
     unit: unit || 'pcs',
     imageUrl,
+    createdBy: objectUserId,
+  });
+
+  await claimOperation({
+    business: objectBusinessId!,
+    operationId: syncOperationId,
+    entityType: 'product',
+    entity: product._id as Types.ObjectId,
     createdBy: objectUserId,
   });
 
@@ -148,10 +181,30 @@ const adjustProductStock = asyncHandler(async (req: Request, res) => {
 
   await requireMembership(product.business, objectUserId);
 
-  const { type, quantity } = req.body as { type: 'increase' | 'decrease' | 'set'; quantity: number };
+  const { type, quantity, operationId } = req.body as {
+    type: 'increase' | 'decrease' | 'set';
+    quantity: number;
+    operationId?: string;
+  };
   const qty = Number(quantity);
   if (!Number.isFinite(qty) || qty < 0) {
     throw new ApiError(400, 'A valid quantity is required');
+  }
+
+  // A stock adjustment is the one write here with no document of its own, so a
+  // blind retry would apply the delta twice. The operation ledger is what makes
+  // it safe to replay.
+  const syncOperationId = parseOperationId(operationId);
+  if (syncOperationId) {
+    const replayedId = await findReplay(Product, product.business, syncOperationId);
+    if (replayedId) {
+      return sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Stock already adjusted',
+        data: await Product.findById(replayedId),
+      });
+    }
   }
 
   let delta = 0;
@@ -160,7 +213,29 @@ const adjustProductStock = asyncHandler(async (req: Request, res) => {
   else if (type === 'set') delta = qty - product.stock;
   else throw new ApiError(400, 'Invalid adjustment type');
 
-  const updated = await adjustStock(product._id as any, delta);
+  let updated;
+  if (syncOperationId) {
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        updated = await adjustStock(product._id as any, delta, session);
+        await claimOperation(
+          {
+            business: product.business,
+            operationId: syncOperationId,
+            entityType: 'stock_adjustment',
+            entity: product._id as Types.ObjectId,
+            createdBy: objectUserId,
+          },
+          session,
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+  } else {
+    updated = await adjustStock(product._id as any, delta);
+  }
 
   sendResponse(res, {
     statusCode: 200,
