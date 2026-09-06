@@ -4,6 +4,7 @@ import cors from 'cors';
 import { errorHandler } from './middlewares/errorHandler';
 import cookieParser from 'cookie-parser';
 import connectDB from './config/db';
+import { health } from './controllers/health.controller';
 import {
   seedDefaultCategories,
   seedMessCategories,
@@ -26,6 +27,13 @@ app.use(
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 seedDefaultCategories();
+
+// ✅ /api/health must answer instantly. It only reads `mongoose.connection.readyState`
+// and must NOT sit behind the DB-connect middleware, which on a cold serverless
+// lambda blocks until MongoDB connects (up to the selection timeout). The offline
+// probe therefore sees 200 (API reachable) the moment the API answers, while the
+// `writable` field still tells it whether the DB is warm enough to accept syncs.
+app.get('/api/health', health);
 
 // ✅ Connect DB before every request (cached — only connects once)
 app.use(async (_req: Request, _res: Response, next: NextFunction) => {

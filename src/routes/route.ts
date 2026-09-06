@@ -21,12 +21,8 @@ import { purchaseController } from '../controllers/purchase.controller';
 import { expenseController } from '../controllers/expense.controller';
 import { paymentController } from '../controllers/payment.controller';
 import { reportController } from '../controllers/report.controller';
-import { health } from '../controllers/health.controller';
 
 const route: Router = express.Router();
-
-// ── Connectivity probe (public — the offline client polls this) ──
-route.get('/health', health);
 
 route.post('/auth/register', authController.register);
 route.post('/auth/login', authController.login);
