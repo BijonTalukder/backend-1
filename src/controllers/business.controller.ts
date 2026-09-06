@@ -181,9 +181,13 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {
     });
   }
 
+  const business = await Business.findById(businessId);
+  if (!business) throw new ApiError(404, 'Business not found');
+
   // Allowlist: never let a generic update touch structural fields (type,
-  // owner, status) or ledger-derived balances (cashBalance, bankBalance,
-  // openingBalance) — those must only ever move through recordLedgerEntry.
+  // owner, status) or ledger-derived balances. openingBalance is handled
+  // separately below, gated by an activity lock; cashBalance is synced to it
+  // only while the business is still fresh.
   const UPDATABLE_FIELDS = [
     'name',
     'category',
@@ -202,15 +206,90 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   }
 
-  const business = await Business.findByIdAndUpdate(businessId, updates, {
-    new: true,
-  });
+  const currentOpeningBalance = Number(business.openingBalance ?? 0);
+  const wantsOpeningBalanceChange =
+    req.body.openingBalance !== undefined &&
+    Number(req.body.openingBalance) !== currentOpeningBalance;
+
+  if (wantsOpeningBalanceChange) {
+    const parsedOpeningBalance = Number(req.body.openingBalance) || 0;
+    if (parsedOpeningBalance < 0) {
+      throw new ApiError(400, 'Opening balance cannot be negative');
+    }
+    // Only safe to change while the ledger still holds just the
+    // opening-balance adjustment — afterwards it would rewrite the books.
+    const hasActivity = await Transaction.exists({
+      business: businessId,
+      isAdjustment: { $ne: true },
+    });
+    if (hasActivity) {
+      throw new ApiError(
+        400,
+        'Opening balance can no longer be changed after transactions have been recorded',
+      );
+    }
+    updates.openingBalance = parsedOpeningBalance;
+    updates.cashBalance = parsedOpeningBalance;
+  }
+
+  if (!wantsOpeningBalanceChange) {
+    await Business.findByIdAndUpdate(businessId, updates, { new: true });
+  } else {
+    // Opening balance is ledger-backed: re-sync the 'Opening balance'
+    // adjustment transaction in the same session as the business update.
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await Business.findByIdAndUpdate(businessId, updates, {
+          new: true,
+        }).session(session);
+
+        await Transaction.deleteMany({
+          business: businessId,
+          isAdjustment: true,
+          note: 'Opening balance',
+        }).session(session);
+
+        const parsedOpeningBalance = Number(req.body.openingBalance) || 0;
+        if (business.type === 'business' && parsedOpeningBalance > 0) {
+          const adjustmentCategory = await TransactionCategory.findOne({
+            business: businessId,
+            name: 'Other Income',
+          }).session(session);
+
+          if (adjustmentCategory) {
+            await Transaction.create(
+              [
+                {
+                  business: businessId,
+                  type: 'income',
+                  amount: parsedOpeningBalance,
+                  category: adjustmentCategory._id,
+                  note: 'Opening balance',
+                  createdBy: objectUserId,
+                  member: objectUserId,
+                  paymentMethod: 'cash',
+                  isAdjustment: true,
+                  settlementStatus: 'not_applicable',
+                },
+              ],
+              { session },
+            );
+          }
+        }
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+
+  const updated = await Business.findById(businessId);
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: 'Business updated successfully',
-    data: business,
+    data: updated,
   });
 });
 
