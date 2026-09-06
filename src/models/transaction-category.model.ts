@@ -78,6 +78,8 @@ const transactionCategorySchema = new mongoose.Schema<ITransactionCategory>(
 
 transactionCategorySchema.index({ business: 1, status: 1 });
 transactionCategorySchema.index({ isGlobal: 1, status: 1 });
+// Hot lookup during sale/purchase/payment creation: category by name.
+transactionCategorySchema.index({ business: 1, name: 1 });
 
 const TransactionCategory = mongoose.model<ITransactionCategory>(
   'TransactionCategory',

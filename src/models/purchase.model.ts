@@ -65,6 +65,7 @@ const purchaseSchema = new mongoose.Schema<IPurchase>(
 
 purchaseSchema.index({ business: 1, date: -1 });
 purchaseSchema.index({ business: 1, supplier: 1 });
+purchaseSchema.index({ business: 1, supplier: 1, date: -1 });
 purchaseSchema.index({ business: 1, referenceNumber: 1 }, { unique: true });
 
 const Purchase = mongoose.model<IPurchase>('Purchase', purchaseSchema);

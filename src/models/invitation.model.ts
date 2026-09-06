@@ -57,6 +57,8 @@ const invitationSchema = new mongoose.Schema<IInvitation>(
 invitationSchema.index({ email: 1, business: 1 });
 invitationSchema.index({ token: 1 });
 invitationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index
+// Sent-invitations list for a business, newest first.
+invitationSchema.index({ business: 1, createdAt: -1 });
 
 const Invitation = mongoose.model<IInvitation>('Invitation', invitationSchema);
 export default Invitation;

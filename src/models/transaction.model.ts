@@ -198,6 +198,14 @@ transactionSchema.index({ business: 1, type: 1, date: -1 });
 transactionSchema.index({ business: 1, settlementStatus: 1 });
 transactionSchema.index({ business: 1, category: 1, date: -1 });
 transactionSchema.index({ 'paidFor.member': 1, settlementStatus: 1 });
+// Customer/supplier detail ledger lookups filter by party (not business).
+transactionSchema.index({ customer: 1, date: -1 });
+transactionSchema.index({ supplier: 1, date: -1 });
+// Transactions list filtered by party, still date-sorted within a business.
+transactionSchema.index({ business: 1, customer: 1, date: -1 });
+transactionSchema.index({ business: 1, supplier: 1, date: -1 });
+// Dashboard aggregate ranges grouped/filtered by transaction source type.
+transactionSchema.index({ business: 1, 'source.type': 1, date: -1 });
 
 const Transaction = mongoose.model<ITransaction>(
   'Transaction',

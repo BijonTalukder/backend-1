@@ -32,6 +32,7 @@ const expenseSchema = new mongoose.Schema<IExpense>(
 
 expenseSchema.index({ business: 1, date: -1 });
 expenseSchema.index({ business: 1, category: 1 });
+expenseSchema.index({ business: 1, category: 1, date: -1 });
 
 const Expense = mongoose.model<IExpense>('Expense', expenseSchema);
 export default Expense;

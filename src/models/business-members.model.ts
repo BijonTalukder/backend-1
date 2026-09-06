@@ -35,6 +35,10 @@ const businessMembersSchema = new mongoose.Schema<BusinessMembers>(
 );
 
 businessMembersSchema.index({ business: 1, user: 1 }, { unique: true });
+// getMyBusinesses / deleteAccount query by user only (business not in filter).
+businessMembersSchema.index({ user: 1, status: 1 });
+// List all active members of a business (member listing, mess, invoices).
+businessMembersSchema.index({ business: 1, status: 1 });
 
 export const BusinessMembersModel = mongoose.model<BusinessMembers>(
   'BusinessMembers',

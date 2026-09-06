@@ -113,6 +113,8 @@ const invoiceSchema = new Schema<IInvoice>(
 // একই business এর একই month/year এ একটাই invoice
 invoiceSchema.index({ business: 1, month: 1, year: 1 }, { unique: true });
 invoiceSchema.index({ business: 1, generatedAt: -1 });
+// Invoice listing sorts by year/month — the generatedAt index can't serve it.
+invoiceSchema.index({ business: 1, year: -1, month: -1 });
 
 const Invoice =
   mongoose.models.Invoice || mongoose.model<IInvoice>('Invoice', invoiceSchema);

@@ -39,6 +39,7 @@ const paymentSchema = new mongoose.Schema<IPayment>(
 
 paymentSchema.index({ business: 1, date: -1 });
 paymentSchema.index({ business: 1, party: 1 });
+paymentSchema.index({ business: 1, direction: 1, date: -1 });
 
 const Payment = mongoose.model<IPayment>('Payment', paymentSchema);
 export default Payment;
