@@ -111,12 +111,30 @@ const updateSupplier = asyncHandler(async (req: Request, res) => {
 
   await requireMembership(supplier.business, objectUserId, ['owner', 'admin']);
 
-  const { name, phone, email, address, notes } = req.body;
+  const { name, phone, email, address, openingBalance, notes } = req.body;
   if (name !== undefined) supplier.name = name;
   if (phone !== undefined) supplier.phone = phone;
   if (email !== undefined) supplier.email = email;
   if (address !== undefined) supplier.address = address;
   if (notes !== undefined) supplier.notes = notes;
+  if (openingBalance !== undefined && Number(openingBalance) !== supplier.openingBalance) {
+    const parsedOpeningBalance = Number(openingBalance) || 0;
+    if (parsedOpeningBalance < 0) {
+      throw new ApiError(400, 'Opening balance cannot be negative');
+    }
+    // Only safe to change before any purchases/payments exist — afterwards it
+    // would silently rewrite the ledger-backed history behind totalPayable.
+    const hasActivity = supplier.totalPurchases > 0 || supplier.totalPaid > 0;
+    if (hasActivity) {
+      throw new ApiError(
+        400,
+        'Opening balance can no longer be changed after purchases or payments have been recorded',
+      );
+    }
+    // totalPayable = openingBalance when nothing has been bought or paid yet.
+    supplier.totalPayable = parsedOpeningBalance;
+    supplier.openingBalance = parsedOpeningBalance;
+  }
 
   await supplier.save();
 
