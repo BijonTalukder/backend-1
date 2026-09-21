@@ -107,6 +107,7 @@ route.get('/payments/business/:businessId', auth, paymentController.getPayments)
 route.get('/reports/profit-loss/:businessId', auth, reportController.getProfitLoss);
 //category
 route.post('/categories', auth, categoryController.createCategory);
+route.get('/categories/business/:businessId', auth, categoryController.getCategoriesByBusiness);
 route.get('/categories', auth, categoryController.getAllCategories);
 route.get(
   '/categories/active',
