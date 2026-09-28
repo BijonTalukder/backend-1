@@ -10,6 +10,9 @@ const ROLES = [
 ] as const;
 type Role = (typeof ROLES)[number];
 
+const AUTH_PROVIDERS = ['local', 'google'] as const;
+type AuthProvider = (typeof AUTH_PROVIDERS)[number];
+
 // ── Interface ─────────────────────────────────────────────
 
 export interface IUser extends Document {
@@ -19,6 +22,8 @@ export interface IUser extends Document {
   password: string;
   passwordChangedAt?: Date;
   role: Role;
+  authProvider: AuthProvider;
+  firebaseUid?: string;
   organization?: mongoose.Types.ObjectId;
   isActive: boolean;
   lastLogin?: Date;
@@ -74,6 +79,14 @@ const userSchema = new mongoose.Schema<IUser>(
       enum: ROLES,
       default: 'member',
     },
+    authProvider: {
+      type: String,
+      enum: AUTH_PROVIDERS,
+      default: 'local',
+    },
+    firebaseUid: {
+      type: String,
+    },
     organization: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Organization',
@@ -109,6 +122,9 @@ const userSchema = new mongoose.Schema<IUser>(
 
 // userSchema.index({ email: 1 });
 userSchema.index({ organization: 1, role: 1 });
+// Sparse unique: users without a Firebase identity (null/missing) are not
+// constrained, so existing local accounts keep working.
+userSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
 
 // ── Virtual ───────────────────────────────────────────────
 

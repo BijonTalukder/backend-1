@@ -9,3 +9,7 @@ dist/
 .env.local
 .env.*   # optionally ignore all .env.* files
 env/
+
+# Firebase Admin service account (server-only secret — never commit)
+firebase-service-account.json
+*.firebase-adminsdk-*.json
