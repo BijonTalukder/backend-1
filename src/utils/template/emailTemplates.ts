@@ -116,3 +116,98 @@ export const inviteEmailTemplate = ({
 </body>
 </html>
 `;
+
+export const resetOtpEmailTemplate = ({
+  firstName,
+  code,
+  expiresMinutes,
+}: {
+  firstName: string;
+  code: string;
+  expiresMinutes: number;
+}) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reset your password</title>
+</head>
+<body style="margin:0;padding:0;background:#0a0f1e;font-family:'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0f1e;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="520" cellpadding="0" cellspacing="0"
+          style="background:#0d1424;border-radius:20px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.03));
+                       padding:32px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <div style="background:#10b981;width:36px;height:36px;border-radius:10px;
+                                display:inline-flex;align-items:center;justify-content:center;
+                                vertical-align:middle;margin-right:10px;">
+                      <span style="color:#022c22;font-size:18px;font-weight:900;line-height:1;">₿</span>
+                    </div>
+                    <span style="color:#fff;font-size:20px;font-weight:700;
+                                 font-family:Georgia,serif;vertical-align:middle;">CashBook</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="margin:0 0 6px;color:#64748b;font-size:12px;text-transform:uppercase;
+                         letter-spacing:1px;">Password reset</p>
+              <h1 style="margin:0 0 20px;color:#fff;font-size:26px;font-family:Georgia,serif;
+                          font-weight:700;line-height:1.3;">
+                Hi <span style="color:#10b981;">${firstName}</span>, verify it's you
+              </h1>
+
+              <p style="margin:0 0 28px;color:#94a3b8;font-size:15px;line-height:1.7;">
+                Enter this code on the reset page to choose a new password:
+              </p>
+
+              <!-- Code -->
+              <table cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center" style="padding-bottom:28px;">
+                    <div style="background:rgba(16,185,129,0.08);border:1px dashed rgba(16,185,129,0.45);
+                                border-radius:14px;padding:20px 0;display:block;">
+                      <span style="color:#10b981;font-size:38px;font-weight:800;letter-spacing:12px;
+                                   font-family:Georgia,serif;">${code}</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 8px;color:#334155;font-size:13px;line-height:1.6;">
+                This code expires in <strong style="color:#64748b;">${expiresMinutes} minutes</strong>.
+                It can be used <strong style="color:#64748b;">5 times</strong> before it is invalidated.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px;border-top:1px solid rgba(255,255,255,0.05);">
+              <p style="margin:0;color:#1e293b;font-size:11px;">
+                If you didn't request a password reset, you can safely ignore this email —
+                your password will not change.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;

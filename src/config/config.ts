@@ -7,6 +7,11 @@ interface Config {
   nodeEnv: string;
   mongoURI: string;
   jwtSecret: string;
+  firebase: {
+    projectId?: string;
+    clientEmail?: string;
+    privateKey?: string;
+  };
 }
 
 const config: Config = {
@@ -14,6 +19,11 @@ const config: Config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   mongoURI: process.env.MONGO_URI || '',
   jwtSecret: process.env.JWT_SECRET || 'secret',
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  },
 };
 
 export default config;
