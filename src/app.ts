@@ -18,6 +18,7 @@ app.use(
     origin: [
       'https://cashbook-frontend-wine.vercel.app',
       'http://localhost:5173',
+      'https://hisabboi.vercel.app',
       'https://hisabboi.vercel.app'
     ],
     credentials: true,
