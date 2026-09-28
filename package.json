@@ -14,6 +14,14 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": "22.x"
+  },
+  "pnpm": {
+    "overrides": {
+      "jose": "^5.10.0"
+    }
+  },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
