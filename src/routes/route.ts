@@ -26,6 +26,11 @@ const route: Router = express.Router();
 
 route.post('/auth/register', authController.register);
 route.post('/auth/login', authController.login);
+route.post('/auth/google', authController.googleLogin);
+
+route.post('/auth/forgot-password', authController.forgotPassword);
+route.post('/auth/verify-otp', authController.verifyResetOtp);
+route.post('/auth/reset-password', authController.resetPassword);
 route.patch('/auth/profile', auth, authController.updateProfile);
 route.patch('/auth/change-password', auth, authController.changePassword);
 route.delete('/auth/account', auth, authController.deleteAccount);

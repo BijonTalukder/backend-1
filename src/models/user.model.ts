@@ -12,6 +12,8 @@ type Role = (typeof ROLES)[number];
 
 export const FCM_PLATFORMS = ['android'] as const;
 export type FcmPlatform = (typeof FCM_PLATFORMS)[number];
+const AUTH_PROVIDERS = ['local', 'google'] as const;
+type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
 // ── Interface ─────────────────────────────────────────────
 
@@ -29,6 +31,8 @@ export interface IUser extends Document {
   password: string;
   passwordChangedAt?: Date;
   role: Role;
+  authProvider: AuthProvider;
+  firebaseUid?: string;
   organization?: mongoose.Types.ObjectId;
   isActive: boolean;
   lastLogin?: Date;
@@ -88,6 +92,14 @@ const userSchema = new mongoose.Schema<IUser>(
       type: String,
       enum: ROLES,
       default: 'member',
+    },
+    authProvider: {
+      type: String,
+      enum: AUTH_PROVIDERS,
+      default: 'local',
+    },
+    firebaseUid: {
+      type: String,
     },
     organization: {
       type: mongoose.Schema.Types.ObjectId,
@@ -156,6 +168,9 @@ userSchema.index({ organization: 1, role: 1 });
 // (a token that previously belonged to User A and is now being claimed by
 // User B after logout/login on the same device).
 userSchema.index({ 'fcmTokens.token': 1 });
+// Sparse unique: users without a Firebase identity (null/missing) are not
+// constrained, so existing local accounts keep working.
+userSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
 
 // ── Virtual ───────────────────────────────────────────────
 
