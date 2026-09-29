@@ -30,6 +30,7 @@ route.patch('/auth/profile', auth, authController.updateProfile);
 route.patch('/auth/change-password', auth, authController.changePassword);
 route.delete('/auth/account', auth, authController.deleteAccount);
 route.patch('/users/default-business', auth, userController.setDefaultBusiness);
+route.post('/users/fcm-token', auth, userController.registerFcmToken);
 
 route.post('/businesses', auth, businessController.createBusiness);
 route.get('/businesses/my', auth, businessController.getMyBusinesses);

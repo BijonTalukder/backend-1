@@ -10,7 +10,17 @@ const ROLES = [
 ] as const;
 type Role = (typeof ROLES)[number];
 
+export const FCM_PLATFORMS = ['android'] as const;
+export type FcmPlatform = (typeof FCM_PLATFORMS)[number];
+
 // ── Interface ─────────────────────────────────────────────
+
+export interface IFcmToken {
+  token: string;
+  platform: FcmPlatform;
+  createdAt: Date;
+  lastUsedAt: Date;
+}
 
 export interface IUser extends Document {
   firstName: string;
@@ -24,6 +34,11 @@ export interface IUser extends Document {
   lastLogin?: Date;
   avatar?: string;
   defaultBusiness?: mongoose.Types.ObjectId;
+  /**
+   * FCM device tokens belonging to this user. A user may have multiple
+   * Android devices/installs, so this is an array, not a single field.
+   */
+  fcmTokens: IFcmToken[];
   createdAt: Date;
   updatedAt: Date;
   onboardingCompleted: boolean;
@@ -97,6 +112,34 @@ const userSchema = new mongoose.Schema<IUser>(
       ref: 'Business',
       default: null,
     },
+    fcmTokens: {
+      type: [
+        new mongoose.Schema<IFcmToken>(
+          {
+            token: {
+              type: String,
+              required: true,
+            },
+            platform: {
+              type: String,
+              enum: FCM_PLATFORMS,
+              default: 'android',
+            },
+            createdAt: {
+              type: Date,
+              default: Date.now,
+            },
+            lastUsedAt: {
+              type: Date,
+              default: Date.now,
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -109,6 +152,10 @@ const userSchema = new mongoose.Schema<IUser>(
 
 // userSchema.index({ email: 1 });
 userSchema.index({ organization: 1, role: 1 });
+// Fast lookup of an FCM token across users when handling ownership transfers
+// (a token that previously belonged to User A and is now being claimed by
+// User B after logout/login on the same device).
+userSchema.index({ 'fcmTokens.token': 1 });
 
 // ── Virtual ───────────────────────────────────────────────
 
