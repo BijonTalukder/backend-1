@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { authController } from '../controllers/auth.controller';
-import { auth } from '../middlewares/auth.middleware';
+import { auth, authorizeRoles } from '../middlewares/auth.middleware';
 import { transactionCategoryController } from '../controllers/transaction-category.controller';
 import { invitationController } from '../controllers/invitation.controller';
 import { businessController } from '../controllers/business.controller';
@@ -21,6 +21,7 @@ import { purchaseController } from '../controllers/purchase.controller';
 import { expenseController } from '../controllers/expense.controller';
 import { paymentController } from '../controllers/payment.controller';
 import { reportController } from '../controllers/report.controller';
+import { notificationController } from '../controllers/notification.controller';
 
 const route: Router = express.Router();
 
@@ -267,4 +268,37 @@ route.delete(
   businessInvoicesController.deleteInvoice,
 );
 route.post('/ai/chat', auth, aiChat)
+
+// ── Admin notifications ───────────────────────────────────────────────────
+const adminAuth = [auth, authorizeRoles('super_admin', 'admin')];
+route.get(
+  '/admin/notifications/templates',
+  ...adminAuth,
+  notificationController.listTemplates,
+);
+route.post(
+  '/admin/notifications/preview-count',
+  ...adminAuth,
+  notificationController.previewCount,
+);
+route.post(
+  '/admin/notifications/compose-ai',
+  ...adminAuth,
+  notificationController.composeAi,
+);
+route.post(
+  '/admin/notifications/send',
+  ...adminAuth,
+  notificationController.sendNotification,
+);
+route.get(
+  '/admin/notifications',
+  ...adminAuth,
+  notificationController.listCampaigns,
+);
+route.get(
+  '/admin/notifications/:id',
+  ...adminAuth,
+  notificationController.getCampaign,
+);
 export default route;
