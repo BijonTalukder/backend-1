@@ -22,6 +22,7 @@ import { expenseController } from '../controllers/expense.controller';
 import { paymentController } from '../controllers/payment.controller';
 import { reportController } from '../controllers/report.controller';
 import { notificationController } from '../controllers/notification.controller';
+import { adminController } from '../controllers/admin.controller';
 
 const route: Router = express.Router();
 
@@ -301,4 +302,29 @@ route.get(
   ...adminAuth,
   notificationController.getCampaign,
 );
+
+// ── Admin platform aggregates (read-only) ────────────────────────────────
+// Reachable from the language-larn gateway via X-Internal-Service-Key
+// (see hisabboiServiceAccount.ts). The auth middleware injects a synthetic
+// super_admin identity for that header, so these sit behind the same
+// authorizeRoles gate as the notifications block above.
+route.get('/admin/overview', ...adminAuth, adminController.getOverview);
+route.get('/admin/stats', ...adminAuth, adminController.getStats);
+route.get('/admin/user-growth', ...adminAuth, adminController.getUserGrowth);
+route.get('/admin/recent-signups', ...adminAuth, adminController.getRecentSignups);
+route.get('/admin/revenue-trend', ...adminAuth, adminController.getRevenueTrend);
+route.get('/admin/sales-status', ...adminAuth, adminController.getSalesStatusBreakdown);
+route.get('/admin/payment-methods', ...adminAuth, adminController.getPaymentMethodBreakdown);
+route.get('/admin/business-types', ...adminAuth, adminController.getBusinessTypeMix);
+route.get('/admin/top-businesses', ...adminAuth, adminController.getTopBusinessesByRevenue);
+route.get('/admin/auth-providers', ...adminAuth, adminController.getAuthProviderSplit);
+
+route.get('/admin/users', ...adminAuth, adminController.listUsers);
+route.get('/admin/businesses', ...adminAuth, adminController.listBusinesses);
+route.get('/admin/products', ...adminAuth, adminController.listProducts);
+route.get('/admin/sales', ...adminAuth, adminController.listSales);
+route.get('/admin/customers', ...adminAuth, adminController.listCustomers);
+route.get('/admin/suppliers', ...adminAuth, adminController.listSuppliers);
+route.get('/admin/transactions', ...adminAuth, adminController.listTransactions);
+
 export default route;
