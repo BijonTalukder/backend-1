@@ -164,6 +164,7 @@ const userSchema = new mongoose.Schema<IUser>(
 
 // userSchema.index({ email: 1 });
 userSchema.index({ organization: 1, role: 1 });
+userSchema.index({ createdAt: -1 });
 // Fast lookup of an FCM token across users when handling ownership transfers
 // (a token that previously belonged to User A and is now being claimed by
 // User B after logout/login on the same device).

@@ -66,6 +66,7 @@ const saleSchema = new mongoose.Schema<ISale>(
 );
 
 saleSchema.index({ business: 1, date: -1 });
+saleSchema.index({ date: -1 });
 saleSchema.index({ business: 1, customer: 1 });
 saleSchema.index({ business: 1, customer: 1, date: -1 });
 saleSchema.index({ business: 1, invoiceNumber: 1 }, { unique: true });

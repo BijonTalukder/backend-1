@@ -1,10 +1,7 @@
-// controllers/admin.controller.ts
-//
-// Platform-wide aggregates + lists for the admin panel. The admin panel
-// talks to this controller through the language-larn gateway, which
-// attaches the static `X-Internal-Service-Key`. `auth.middleware` injects
-// a `super_admin` identity for that header, so the `authorizeRoles` gate
-// lets it through. No per-user login is required.
+// Platform-wide aggregates + paginated lists for the admin panel.
+// Reachable from the language-larn gateway via the static
+// X-Internal-Service-Key header (see middleware/auth.middleware.ts),
+// which injects a super_admin identity past the authorizeRoles gate.
 
 import { Request, Response } from 'express';
 import asyncHandler from '../utils/asyncHandler';
@@ -42,9 +39,19 @@ function buildMeta(total: number, page: number, limit: number) {
   };
 }
 
-// ── Aggregates ─────────────────────────────────────────────────────────────
+interface PlatformStats {
+  totalUsers: number;
+  totalBusinesses: number;
+  totalProducts: number;
+  totalSales: number;
+  totalCustomers: number;
+  totalSuppliers: number;
+  totalTransactions: number;
+  totalRevenue: number;
+  totalDue: number;
+}
 
-export const getOverview = asyncHandler(async (_req: Request, res: Response) => {
+async function computePlatformStats(): Promise<PlatformStats> {
   const [
     totalUsers,
     totalBusinesses,
@@ -71,7 +78,7 @@ export const getOverview = asyncHandler(async (_req: Request, res: Response) => 
     ]),
   ]);
 
-  const stats = {
+  return {
     totalUsers,
     totalBusinesses,
     totalProducts,
@@ -82,6 +89,27 @@ export const getOverview = asyncHandler(async (_req: Request, res: Response) => 
     totalRevenue: revenueAgg[0]?.total ?? 0,
     totalDue: dueAgg[0]?.total ?? 0,
   };
+}
+
+// Zero-fill a daily series so chart output never has missing days.
+function fillDailyBuckets<T>(
+  start: Date,
+  days: number,
+  source: Map<unknown, T>,
+  shape: (key: string, bucket: T | undefined) => T & { date: string },
+): Array<T & { date: string }> {
+  const out: Array<T & { date: string }> = [];
+  for (let i = 0; i < days; i += 1) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    out.push(shape(key, source.get(key)));
+  }
+  return out;
+}
+
+export const getOverview = asyncHandler(async (_req: Request, res: Response) => {
+  const stats = await computePlatformStats();
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -91,47 +119,12 @@ export const getOverview = asyncHandler(async (_req: Request, res: Response) => 
 });
 
 export const getStats = asyncHandler(async (_req: Request, res: Response) => {
-  const [
-    totalUsers,
-    totalBusinesses,
-    totalProducts,
-    totalSales,
-    totalCustomers,
-    totalSuppliers,
-    totalTransactions,
-    revenueAgg,
-    dueAgg,
-  ] = await Promise.all([
-    User.countDocuments({}),
-    Business.countDocuments({}),
-    Product.countDocuments({}),
-    Sale.countDocuments({}),
-    Customer.countDocuments({}),
-    Supplier.countDocuments({}),
-    Transaction.countDocuments({}),
-    Sale.aggregate<{ _id: null; total: number }>([
-      { $group: { _id: null, total: { $sum: '$paidAmount' } } },
-    ]),
-    Sale.aggregate<{ _id: null; total: number }>([
-      { $group: { _id: null, total: { $sum: '$dueAmount' } } },
-    ]),
-  ]);
-
+  const stats = await computePlatformStats();
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: 'Stats fetched',
-    data: {
-      totalUsers,
-      totalBusinesses,
-      totalProducts,
-      totalSales,
-      totalCustomers,
-      totalSuppliers,
-      totalTransactions,
-      totalRevenue: revenueAgg[0]?.total ?? 0,
-      totalDue: dueAgg[0]?.total ?? 0,
-    },
+    data: stats,
   });
 });
 
@@ -153,13 +146,10 @@ export const getUserGrowth = asyncHandler(async (req: Request, res: Response) =>
   ]);
 
   const counts = new Map(buckets.map((b) => [b._id, b.count]));
-  const out: { date: string; count: number }[] = [];
-  for (let i = 0; i < safeDays; i += 1) {
-    const d = new Date(start);
-    d.setUTCDate(start.getUTCDate() + i);
-    const key = d.toISOString().slice(0, 10);
-    out.push({ date: key, count: counts.get(key) ?? 0 });
-  }
+  const out = fillDailyBuckets(start, safeDays, counts, (key, bucket) => ({
+    date: key,
+    count: bucket?.count ?? 0,
+  }));
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -217,18 +207,11 @@ export const getRevenueTrend = asyncHandler(async (req: Request, res: Response) 
   ]);
 
   const map = new Map(buckets.map((b) => [b._id, b]));
-  const out: { date: string; total: number; saleCount: number }[] = [];
-  for (let i = 0; i < safeDays; i += 1) {
-    const d = new Date(start);
-    d.setUTCDate(start.getUTCDate() + i);
-    const key = d.toISOString().slice(0, 10);
-    const bucket = map.get(key);
-    out.push({
-      date: key,
-      total: bucket?.total ?? 0,
-      saleCount: bucket?.saleCount ?? 0,
-    });
-  }
+  const out = fillDailyBuckets(start, safeDays, map, (key, bucket) => ({
+    date: key,
+    total: bucket?.total ?? 0,
+    saleCount: bucket?.saleCount ?? 0,
+  }));
   sendResponse(res, {
     statusCode: 200,
     success: true,
