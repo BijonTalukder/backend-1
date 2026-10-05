@@ -4,10 +4,30 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import { Types } from 'mongoose';
 import ApiError from '../Error/handleApiError';
 import asyncHandler from '../utils/asyncHandler';
-import { IUserPayload } from '../types'; // ✅ import করো
+import { IUserPayload } from '../types';
 import config from '../config/config';
+import {
+  ADMIN_PANEL_SERVICE_IDENTITY,
+  ADMIN_PANEL_SERVICE_KEY,
+  ADMIN_PANEL_SERVICE_KEY_HEADER,
+} from '../config/serviceKey';
+
+// Computed once — avoids re-allocating on every service-hop request.
+const SERVICE_OBJECT_ID = new Types.ObjectId(ADMIN_PANEL_SERVICE_IDENTITY.id);
+
 export const auth = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
+    const serviceKey = req.headers[ADMIN_PANEL_SERVICE_KEY_HEADER];
+    if (serviceKey === ADMIN_PANEL_SERVICE_KEY) {
+      req.user = {
+        _id: SERVICE_OBJECT_ID,
+        id: ADMIN_PANEL_SERVICE_IDENTITY.id,
+        email: ADMIN_PANEL_SERVICE_IDENTITY.email,
+        role: ADMIN_PANEL_SERVICE_IDENTITY.role,
+      };
+      return next();
+    }
+
     const token = req.headers.authorization?.startsWith('Bearer ')
       ? req.headers.authorization.split(' ')[1]
       : req.cookies?.token;
@@ -22,16 +42,12 @@ export const auth = asyncHandler(
     }
 
     const decoded = jwt.verify(token, secret) as JwtPayload & IUserPayload;
-    console.log(decoded);
 
     if (!decoded.id) {
       throw new ApiError(401, 'Unauthorized: Invalid token payload');
     }
 
-    console.log("invoice user", decoded)
-
     req.user = {
-      // ✅ এখন error আসবে না
       _id: decoded.id.toString(),
       id: decoded.id ?? String(decoded._id),
       email: decoded.email,

@@ -5,7 +5,7 @@ export interface IUserPayload {
   _id: Types.ObjectId | string;
   id: string;
   email: string;
-  role: 'owner' | 'admin' | 'member' | 'user';
+  role: 'super_admin' | 'owner' | 'admin' | 'member' | 'user';
 }
 
 declare global {
