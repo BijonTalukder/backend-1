@@ -452,7 +452,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
       try {
         await sendEmail({
           to: email,
-          subject: 'Your CashBook password reset code',
+          subject: 'Your HisabBoi password reset code',
           html: resetOtpEmailTemplate({
             firstName: user.firstName,
             code,

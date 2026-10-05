@@ -1,12 +1,12 @@
 // utils/template/emailTemplates.ts
 //
-// All HisabBoi / CashBook emails share the same dark, rounded shell so the
-// brand stays consistent. Each public template below renders its body into
+// All HisabBoi emails share the same dark, rounded shell so the brand
+// stays consistent. Each public template below renders its body into
 // `cashbookEmailBase`. When you add a new template, copy the existing shape
 // and call the base — don't re-inline the shell or the emails will drift.
 
-const BRAND = 'CashBook';
-const BRAND_INITIAL = '₿';
+const BRAND = 'HisabBoi';
+const BRAND_INITIAL = 'H';
 
 interface BaseArgs {
   label: string;
@@ -16,7 +16,7 @@ interface BaseArgs {
 }
 
 /**
- * Shared CashBook dark email shell. Body must be a string of inline-styled
+ * Shared HisabBoi dark email shell. Body must be a string of inline-styled
  * HTML — no <style> blocks (Gmail strips them).
  */
 export const cashbookEmailBase = ({
@@ -133,7 +133,7 @@ export const inviteEmailTemplate = ({
       </table>
       <p style="margin:24px 0 0;color:#334155;font-size:12px;line-height:1.6;">
         This invitation expires in <strong style="color:#475569;">7 days</strong>.
-        If you don't have a CashBook account yet, you'll need to
+        If you don't have a HisabBoi account yet, you'll need to
         <strong style="color:#475569;">register first</strong> before accepting.
       </p>
     `,
@@ -184,11 +184,11 @@ const escape = (s: string) =>
 
 export const welcomeEmailTemplate = ({ firstName }: { firstName: string }) =>
   cashbookEmailBase({
-    label: 'Welcome to CashBook',
+    label: 'Welcome to HisabBoi',
     title: `Hi <span style="color:#10b981;">${escape(firstName)}</span>, welcome aboard`,
     bodyHtml: `
       <p style="margin:0 0 16px;color:#94a3b8;font-size:15px;line-height:1.7;">
-        We're glad to have you. CashBook is built for small businesses that want
+        We're glad to have you. HisabBoi is built for small businesses that want
         to track every taka without the spreadsheet headache.
       </p>
       <p style="margin:0 0 24px;color:#94a3b8;font-size:15px;line-height:1.7;">
@@ -202,7 +202,7 @@ export const welcomeEmailTemplate = ({ firstName }: { firstName: string }) =>
                style="background:#10b981;color:#022c22;text-decoration:none;
                       padding:14px 40px;border-radius:12px;font-weight:700;
                       font-size:15px;display:inline-block;letter-spacing:0.3px;">
-              Open CashBook →
+              Open HisabBoi →
             </a>
           </td>
         </tr>
@@ -261,7 +261,7 @@ export const monthlySummaryEmailTemplate = ({
     bodyHtml: `
       <p style="margin:0 0 24px;color:#94a3b8;font-size:15px;line-height:1.7;">
         Hi <strong style="color:#fff;">${escape(firstName)}</strong>, here's your
-        CashBook summary for <strong style="color:#fff;">${escape(monthLabel)}</strong>:
+        HisabBoi summary for <strong style="color:#fff;">${escape(monthLabel)}</strong>:
       </p>
       <table width="100%" cellpadding="0" cellspacing="0"
         style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
@@ -365,12 +365,12 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDef[] = [
     label: 'Welcome',
     description: 'Greet new users right after they sign up.',
     preview: 'Hi {firstName}, welcome aboard',
-    subject: 'Welcome to CashBook, {firstName}!',
+    subject: 'Welcome to HisabBoi, {firstName}!',
     bodyHtml: welcomeEmailTemplate({ firstName: '{firstName}' }),
     variables: [
       { key: 'firstName', label: "Recipient's first name", example: 'Anika' },
     ],
-    pushTitle: 'Welcome to CashBook',
+    pushTitle: 'Welcome to HisabBoi',
     pushBody: "Hi {firstName}! Track your first taka in under a minute.",
   },
   {
@@ -397,7 +397,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDef[] = [
     label: 'Monthly Summary',
     description: "Recap the user's month in numbers.",
     preview: "Here's how {monthLabel} went",
-    subject: 'Your CashBook summary — {monthLabel}',
+    subject: 'Your HisabBoi summary — {monthLabel}',
     bodyHtml: monthlySummaryEmailTemplate({
       firstName: '{firstName}',
       monthLabel: '{monthLabel}',
@@ -420,7 +420,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDef[] = [
     label: 'Feature Update',
     description: 'Announce a new feature to the user base.',
     preview: 'Meet {featureName}',
-    subject: 'New in CashBook: {featureName}',
+    subject: 'New in HisabBoi: {featureName}',
     bodyHtml: featureUpdateEmailTemplate({
       firstName: '{firstName}',
       featureName: '{featureName}',
@@ -429,7 +429,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDef[] = [
     variables: [
       { key: 'firstName', label: "Recipient's first name", example: 'Anika' },
       { key: 'featureName', label: 'Feature name', example: 'AI Insights' },
-      { key: 'featureBlurb', label: 'Short blurb', example: 'Ask CashBook anything about your books in plain Bangla.' },
+      { key: 'featureBlurb', label: 'Short blurb', example: 'Ask HisabBoi anything about your books in plain Bangla.' },
     ],
     pushTitle: 'New: {featureName}',
     pushBody: '{featureBlurb}',
@@ -439,7 +439,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDef[] = [
     label: 'Account Warning',
     description: 'Flag a compliance / inactivity issue to a user.',
     preview: 'Heads up about your account',
-    subject: 'Action required on your CashBook account',
+    subject: 'Action required on your HisabBoi account',
     bodyHtml: accountWarningEmailTemplate({
       firstName: '{firstName}',
       reason: '{reason}',

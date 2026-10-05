@@ -3,7 +3,7 @@
 // Wraps Gemini to draft notification subject+body for the admin panel. The
 // admin types a short prompt ("welcome new users", "remind about pending
 // invoices") and we return a subject + plain HTML body that matches the
-// CashBook brand voice.
+// HisabBoi brand voice.
 //
 // Model selection + fallback mirrors controllers/ai.controller.ts. If
 // GEMINI_API_KEY isn't configured we throw a clear ApiError so the admin
@@ -14,7 +14,7 @@ import ApiError from '../Error/handleApiError';
 interface GeminiPart { text?: string }
 interface GeminiError { error?: { message?: string } }
 
-const SYSTEM_PROMPT = `You write short marketing/notification emails for "CashBook" (a.k.a. HisabBoi), a bookkeeping app for small businesses in Bangladesh.
+const SYSTEM_PROMPT = `You write short marketing/notification emails for HisabBoi, a bookkeeping app for small businesses in Bangladesh.
 
 Constraints:
 - Subject: ≤ 60 characters, no emoji, no ALL-CAPS.

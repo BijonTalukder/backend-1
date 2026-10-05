@@ -29,7 +29,7 @@ const trySendInviteEmail = async (opts: {
   try {
     await sendEmail({
       to: opts.to,
-      subject: `${opts.inviterName} invited you to join ${opts.businessName} on CashBook`,
+      subject: `${opts.inviterName} invited you to join ${opts.businessName} on HisabBoi`,
       html: inviteEmailTemplate({
         inviterName: opts.inviterName,
         businessName: opts.businessName,
