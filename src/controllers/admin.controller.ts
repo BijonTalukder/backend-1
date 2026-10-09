@@ -92,13 +92,13 @@ async function computePlatformStats(): Promise<PlatformStats> {
 }
 
 // Zero-fill a daily series so chart output never has missing days.
-function fillDailyBuckets<T>(
+function fillDailyBuckets<T, R>(
   start: Date,
   days: number,
-  source: Map<unknown, T>,
-  shape: (key: string, bucket: T | undefined) => T & { date: string },
-): Array<T & { date: string }> {
-  const out: Array<T & { date: string }> = [];
+  source: Map<string, T>,
+  shape: (key: string, bucket: T | undefined) => R,
+): R[] {
+  const out: R[] = [];
   for (let i = 0; i < days; i += 1) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
@@ -148,7 +148,7 @@ export const getUserGrowth = asyncHandler(async (req: Request, res: Response) =>
   const counts = new Map(buckets.map((b) => [b._id, b.count]));
   const out = fillDailyBuckets(start, safeDays, counts, (key, bucket) => ({
     date: key,
-    count: bucket?.count ?? 0,
+    count: bucket ?? 0,
   }));
   sendResponse(res, {
     statusCode: 200,

@@ -11,7 +11,7 @@ import { businessMembersController } from '../controllers/business-member.contro
 import { mealController } from '../controllers/meal.controller';
 import { massController } from '../controllers/mass.controller';
 import { businessInvoicesController } from '../controllers/invoice.controller';
-import { aiChat } from '../controllers/ai.controller';
+import { aiChat, aiCommand, getAiCommands } from '../controllers/ai.controller';
 import { dashboardController } from '../controllers/dashboard.controller';
 import { customerController } from '../controllers/customer.controller';
 import { supplierController } from '../controllers/supplier.controller';
@@ -268,7 +268,9 @@ route.delete(
   auth,
   businessInvoicesController.deleteInvoice,
 );
-route.post('/ai/chat', auth, aiChat)
+route.post('/ai/chat', auth, aiChat);
+route.post('/ai/command', auth, aiCommand);
+route.get('/ai/commands', auth, getAiCommands);
 
 // ── Admin notifications ───────────────────────────────────────────────────
 const adminAuth = [auth, authorizeRoles('super_admin', 'admin')];

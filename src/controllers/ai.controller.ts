@@ -1,12 +1,29 @@
+// controllers/ai.controller.ts
+//
+// Unified AI Assistant Controller for HisabBoi.
+// Supports:
+// 1. Natural-language and slash command business analytics (/sales, /report, /profit, etc.)
+// 2. Quick income/expense transaction logging ("বাজার ৫০০ টাকা")
+// 3. Conversational financial advising & greetings
+// 4. Metadata-driven command registry discovery for the UI
+
 import { Request } from 'express';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { BusinessMembersModel } from '../models/business-members.model';
 import Transaction from '../models/transaction.model';
-import Business from '../models/business.model';
+import Business, { BusinessType } from '../models/business.model';
 import { Types } from 'mongoose';
 import TransactionCategory from '../models/transaction-category.model';
+import { planQuery, QuerySpec } from '../services/aiQueryPlanner.service';
+import { executeQuery, AnalyticsResult } from '../services/queryExecutor.service';
+import {
+  getAvailableCommandsForBusiness,
+  AnalyticsRole,
+  AnalyticsVisualization,
+} from '../services/analyticsRegistry.service';
+import { getValidIds, requireMembership } from '../utils/businessAuth';
 
 /* ───────── Types ───────── */
 
@@ -37,6 +54,41 @@ interface GeminiError {
   error?: { message?: string };
 }
 
+/* ───────── Helpers ───────── */
+
+const isBengaliText = (text: string): boolean => {
+  return /[\u0980-\u09FF]/.test(text);
+};
+
+const isAnalyticsQuery = (text: string): boolean => {
+  const trimmed = text.trim().toLowerCase();
+  if (trimmed.startsWith('/')) return true;
+
+  const analyticsKeywords = [
+    'বিক্রি', 'লাভ', 'খরচ', 'বকেয়া', 'স্টক', 'ক্যাশ', 'পাওনা', 'দেনা', 'আয়', 'মাল', 'সাপ্লায়ার', 'কাস্টমার',
+    'sales', 'sale', 'profit', 'expense', 'due', 'stock', 'inventory', 'balance', 'revenue',
+    'report', 'purchase', 'customer', 'supplier', 'overview', 'summary', 'cogs',
+  ];
+
+  return analyticsKeywords.some((kw) => trimmed.includes(kw));
+};
+
+const generateAnalyticsNarrative = (analytics: AnalyticsResult, isBn: boolean): string => {
+  const kpiLines = analytics.summary
+    .map(
+      (s) =>
+        `• **${s.label}**: ${s.currency ? s.currency + ' ' : ''}${
+          typeof s.value === 'number' ? s.value.toLocaleString('en-IN') : s.value
+        }`,
+    )
+    .join('\n');
+
+  if (isBn) {
+    return `📊 **${analytics.title}**\n\n${kpiLines}\n\nনিচের চার্ট বা টেবিল অপশন থেকে বিস্তারিত তথ্য দেখে নিতে পারেন।`;
+  }
+  return `📊 **${analytics.title}**\n\n${kpiLines}\n\nYou can switch to the chart or table format below for detailed insights.`;
+};
+
 /* ───────── JSON Extract ───────── */
 
 const extractJSON = (text: string): AITransaction | null => {
@@ -54,11 +106,14 @@ const extractJSON = (text: string): AITransaction | null => {
 /* ───────── Simple Transaction Detect ───────── */
 
 const detectSimpleTransaction = (text: string): AITransaction | null => {
+  // If user typed a slash command, do NOT treat it as a quick transaction
+  if (text.trim().startsWith('/')) return null;
+
   const amountMatch = text.match(/\d+/);
   if (!amountMatch) return null;
   const amount = Number(amountMatch[0]);
 
-  if (/income|received|paichi|paisi|income hoice|income hoyeche/i.test(text))
+  if (/income|received|paichi|paisi|income hoice|income hoyeche/i.test(text)) {
     return {
       action: 'create_transaction',
       type: 'income',
@@ -66,8 +121,9 @@ const detectSimpleTransaction = (text: string): AITransaction | null => {
       category: 'Income',
       note: text,
     };
+  }
 
-  if (/bazar|khawa|khabo|expense|khoroce|spend|buy|kine/i.test(text))
+  if (/bazar|khawa|khabo|expense|khoroce|spend|buy|kine|বাজার|খরচ/i.test(text)) {
     return {
       action: 'create_transaction',
       type: 'expense',
@@ -75,11 +131,12 @@ const detectSimpleTransaction = (text: string): AITransaction | null => {
       category: 'Food',
       note: text,
     };
+  }
 
   return null;
 };
 
-/* ───────── Build Context ───────── */
+/* ───────── Build Business Context for Chat ───────── */
 
 interface TxThin {
   type: 'income' | 'expense' | 'transfer';
@@ -94,13 +151,6 @@ const MONEY = (n: number, c: string) => `${c}${n.toLocaleString('en-IN')}`;
 
 const pctChange = (cur: number, prev: number) =>
   prev === 0 ? 'N/A' : `${cur > prev ? '+' : ''}${(((cur - prev) / prev) * 100).toFixed(1)}%`;
-
-interface CategorySpend {
-  name: string;
-  amount: number;
-  count: number;
-}
-type CategoryAgg = CategorySpend;
 
 const buildBusinessContext = async (businessId: string, userId: string) => {
   const bizId = new Types.ObjectId(businessId);
@@ -169,7 +219,7 @@ const buildBusinessContext = async (businessId: string, userId: string) => {
     cur.count += 1;
     catSpend.set(id, cur);
   }
-  const topCats: CategoryAgg[] = [...catSpend.entries()]
+  const topCats = [...catSpend.entries()]
     .map(([id, v]) => ({ name: catNameMap.get(id) ?? 'Other', ...v }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
@@ -251,9 +301,10 @@ const createTransactionFromAI = async (
 
 export const aiChat = asyncHandler(async (req: Request, res) => {
   const userId = req.user?._id;
-  const { businessId, messages } = req.body as {
+  const { businessId, messages, formatPreference } = req.body as {
     businessId: string;
     messages: Message[];
+    formatPreference?: AnalyticsVisualization;
   };
 
   if (!userId) throw new ApiError(401, 'Unauthorized');
@@ -261,103 +312,151 @@ export const aiChat = asyncHandler(async (req: Request, res) => {
   if (!Array.isArray(messages) || !messages.length)
     throw new ApiError(400, 'messages required');
 
-  const lastMessage = messages[messages.length - 1].content;
-  let reply = '';
-  let tx = null;
+  const { objectUserId, objectBusinessId } = getValidIds(userId, businessId);
+  const membership = await requireMembership(objectBusinessId!, objectUserId);
 
-  /* 1️⃣ Quick detect — no AI call needed */
+  const lastMessage = messages[messages.length - 1].content.trim();
+
+  /* 1️⃣ Quick detect: /slash-command OR business analytics question */
+  if (isAnalyticsQuery(lastMessage)) {
+    const [business, categories] = await Promise.all([
+      Business.findById(objectBusinessId).select('name type currency').lean<{
+        name?: string;
+        type?: string;
+        currency?: string;
+      }>(),
+      TransactionCategory.find({ business: objectBusinessId }).select('name').lean(),
+    ]);
+
+    if (!business) throw new ApiError(404, 'Business not found');
+
+    try {
+      const spec = await planQuery({
+        text: lastMessage,
+        businessContext: {
+          currency: business.currency ?? '৳',
+          businessType: (business.type as BusinessType) ?? 'personal',
+          categories: categories.map((c) => c.name),
+          role: membership.role as AnalyticsRole,
+        },
+        formatPreference,
+      });
+
+      if (spec.op !== 'answer') {
+        const analytics = await executeQuery(spec, {
+          businessId: objectBusinessId!,
+          userId: objectUserId,
+        });
+
+        const reply = generateAnalyticsNarrative(analytics, isBengaliText(lastMessage));
+
+        return sendResponse(res, {
+          statusCode: 200,
+          success: true,
+          message: 'Analytics fetched successfully',
+          data: {
+            reply,
+            analytics,
+            spec,
+          },
+        });
+      }
+    } catch (err: any) {
+      // Fall through to general conversation if planner was not applicable
+      console.warn('Analytics planner fallback:', err?.message);
+    }
+  }
+
+  /* 2️⃣ Quick detect: Instant transaction creation ("বাজার ৫০০ টাকা") */
   const quickTx = detectSimpleTransaction(lastMessage);
 
   if (quickTx) {
-    tx = await createTransactionFromAI(quickTx, businessId, String(userId));
-    reply = `✅ Transaction recorded: ${quickTx.amount}৳ (${quickTx.type})`;
-  } else {
-    /* 2️⃣ Gemini */
-    const context = await buildBusinessContext(businessId, String(userId));
+    const tx = await createTransactionFromAI(quickTx, businessId, String(userId));
+    const reply = `✅ Transaction recorded: ${quickTx.amount}৳ (${quickTx.type}) — ${quickTx.category}`;
+    return sendResponse(res, {
+      statusCode: 201,
+      success: true,
+      message: 'Transaction recorded successfully',
+      data: { reply, transaction: tx },
+    });
+  }
 
-    const systemPrompt = `You are "HisabBoi AI", a bookkeeping assistant for business financial data in Bangladesh.
+  /* 3️⃣ General Gemini conversational response */
+  const context = await buildBusinessContext(businessId, String(userId));
+
+  const systemPrompt = `You are "HisabBoi AI", a smart bookkeeping assistant for businesses in Bangladesh.
 
 Context data:
 ${context.text}
 
-= Instructions =
+Instructions:
 1. If the user wants to CREATE an income or expense transaction, respond with ONLY this JSON (no other text):
 {"action":"create_transaction","type":"expense","amount":500,"category":"Food","note":"বাজার"}
 Category must be one of the Available Categories listed above. amount = number only.
-2. Otherwise reply in Bangla (unless the user writes in English). Be informative and analytical:
-   - Use simple bullet points (with '-' or '*') to structure answers.
-   - Quote exact amounts in the currency shown above.
-   - Refer to totals, month-over-month changes, and top expense categories from the context when relevant.
-   - Compare THIS MONTH vs LAST MONTH using the provided summaries.
-   - Mention transaction dates from RECENT TRANSACTIONS when useful.
-   - Highlight the most important insights first, then details.
-   - If the context does not contain the needed data, say so honestly and suggest what to check.
-3. Do not invent numbers that are not in the context.`;
+2. If the user is asking about business analytics, advise them to use slash commands (e.g. /sales, /report, /profit, /due, /inventory, /expense) for rich charts and graphs.
+3. Otherwise reply in Bengali (unless the user writes in English). Be concise, helpful, and polite.
+4. Quote exact amounts in the currency shown above. Do not invent numbers that are not in the context.`;
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new ApiError(500, 'AI service not configured');
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-pro';
-    // gemini-2.5-pro gives noticeably better analysis but has a stricter free-tier
-    // rate limit than flash — fall back automatically so users still get an answer.
-    const fallbackModel = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash';
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new ApiError(500, 'AI service not configured');
+  const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-pro';
+  const fallbackModel = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash';
 
-    const geminiMessages = [
-      { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: 'ঠিক আছে, আমি সাহায্য করব।' }] },
-      ...messages.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      })),
-    ];
+  const geminiMessages = [
+    { role: 'user', parts: [{ text: systemPrompt }] },
+    { role: 'model', parts: [{ text: 'ঠিক আছে, আমি সাহায্য করব।' }] },
+    ...messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    })),
+  ];
 
-    const callGemini = async (modelName: string) => {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: geminiMessages,
-            generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
-          }),
-        },
-      );
-      return res;
-    };
+  const callGemini = async (modelName: string) => {
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: geminiMessages,
+          generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+        }),
+      },
+    );
+  };
 
-    let response = await callGemini(model);
+  let response = await callGemini(model);
 
-    // Rate-limited or momentarily overloaded → retry once on the cheaper fallback model.
-    if (
-      !response.ok &&
-      (response.status === 429 || response.status === 503) &&
-      fallbackModel !== model
-    ) {
-      response = await callGemini(fallbackModel);
-    }
+  if (
+    !response.ok &&
+    (response.status === 429 || response.status === 503) &&
+    fallbackModel !== model
+  ) {
+    response = await callGemini(fallbackModel);
+  }
 
-    if (!response.ok) {
-      const err = (await response.json().catch(() => ({}))) as GeminiError;
-      throw new ApiError(
-        502,
-        `AI error: ${err?.error?.message ?? response.statusText}`,
-      );
-    }
+  if (!response.ok) {
+    const err = (await response.json().catch(() => ({}))) as GeminiError;
+    throw new ApiError(
+      502,
+      `AI error: ${err?.error?.message ?? response.statusText}`,
+    );
+  }
 
-    const data = (await response.json()) as {
-      candidates?: { content?: { parts?: GeminiPart[] } }[];
-    };
+  const data = (await response.json()) as {
+    candidates?: { content?: { parts?: GeminiPart[] } }[];
+  };
 
-    reply =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text ?? '')
-        .join('') ?? '';
+  let reply =
+    data?.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text ?? '')
+      .join('') ?? '';
 
-    const json = extractJSON(reply);
-    if (json?.action === 'create_transaction') {
-      tx = await createTransactionFromAI(json, businessId, String(userId));
-      reply = `✅ Transaction recorded: ${json.amount}৳ (${json.type}) — ${json.category}`;
-    }
+  let tx = null;
+  const json = extractJSON(reply);
+  if (json?.action === 'create_transaction') {
+    tx = await createTransactionFromAI(json, businessId, String(userId));
+    reply = `✅ Transaction recorded: ${json.amount}৳ (${json.type}) — ${json.category}`;
   }
 
   sendResponse(res, {
@@ -365,5 +464,98 @@ Category must be one of the Available Categories listed above. amount = number o
     success: true,
     message: tx ? 'Transaction recorded successfully' : 'OK',
     data: { reply, transaction: tx ?? null },
+  });
+});
+
+/* ─────────────────────────
+   GET /api/ai/commands
+───────────────────────── */
+
+export const getAiCommands = asyncHandler(async (req: Request, res) => {
+  const userId = req.user?._id;
+  const businessId = req.query.businessId as string;
+
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+  if (!businessId || !Types.ObjectId.isValid(businessId)) {
+    throw new ApiError(400, 'Valid businessId query is required');
+  }
+
+  const { objectUserId, objectBusinessId } = getValidIds(userId, businessId);
+  const membership = await requireMembership(objectBusinessId!, objectUserId);
+
+  const business = await Business.findById(objectBusinessId).select('type').lean<{ type?: BusinessType }>();
+  if (!business) throw new ApiError(404, 'Business not found');
+
+  const commands = getAvailableCommandsForBusiness(
+    (business.type as BusinessType) ?? 'personal',
+    membership.role as AnalyticsRole,
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Commands fetched successfully',
+    data: commands,
+  });
+});
+
+/* ─────────────────────────
+   POST /api/ai/command
+   (Direct programmatic analytics query endpoint)
+───────────────────────── */
+
+export const aiCommand = asyncHandler(async (req: Request, res) => {
+  const userId = req.user?._id;
+  const { businessId, text, formatPreference } = req.body as {
+    businessId?: string;
+    text?: string;
+    formatPreference?: AnalyticsVisualization;
+  };
+
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+  if (!businessId || !Types.ObjectId.isValid(businessId)) {
+    throw new ApiError(400, 'A valid businessId is required');
+  }
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    throw new ApiError(400, 'text is required');
+  }
+  if (text.length > 500) {
+    throw new ApiError(400, 'text is too long (max 500 chars)');
+  }
+
+  const { objectUserId, objectBusinessId } = getValidIds(userId, businessId);
+  const membership = await requireMembership(objectBusinessId!, objectUserId);
+
+  const [business, categories] = await Promise.all([
+    Business.findById(objectBusinessId).select('name type currency').lean<{
+      name?: string;
+      type?: string;
+      currency?: string;
+    }>(),
+    TransactionCategory.find({ business: objectBusinessId }).select('name').lean(),
+  ]);
+  if (!business) throw new ApiError(404, 'Business not found');
+
+  const spec = await planQuery({
+    text,
+    businessContext: {
+      currency: business.currency ?? '৳',
+      businessType: (business.type as BusinessType) ?? 'personal',
+      categories: categories.map((c) => c.name),
+      role: membership.role as AnalyticsRole,
+    },
+    formatPreference,
+  });
+
+  const analytics = await executeQuery(spec, {
+    businessId: objectBusinessId!,
+    userId: objectUserId,
+  });
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'OK',
+    data: { spec, analytics },
   });
 });

@@ -306,7 +306,7 @@ const listCampaigns = asyncHandler(async (req: Request, res) => {
 
 const getCampaign = asyncHandler(async (req: Request, res) => {
   const id = req.params.id;
-  if (!id || !Types.ObjectId.isValid(id)) {
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) {
     throw new ApiError(400, 'Invalid campaign id.');
   }
   const campaign = await NotificationCampaign.findById(id).lean();
