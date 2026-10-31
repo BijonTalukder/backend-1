@@ -328,7 +328,7 @@ function isTransientEmailError(message: string): boolean {
   if (isMailboxLimitError(message)) {
     return /421|4.3.0|temporary|try again later/i.test(message);
   }
-  return /421|4.3.0|temporary|try again later|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|too many connections/i.test(
+  return /421|4.3.0|454|4.7.0|temporary|try again later|too many login attempts|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|too many connections/i.test(
     message,
   );
 }
