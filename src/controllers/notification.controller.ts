@@ -212,8 +212,12 @@ const sendNotification = asyncHandler(async (req: Request, res) => {
     createdBy: new Types.ObjectId(String(req.user?._id ?? new Types.ObjectId())),
   });
 
-  // Fire-and-track. We update the campaign as each channel finishes.
-  void runCampaign(campaign._id.toString(), users, input);
+  // Await the send. On serverless (Vercel) the invocation is frozen as
+  // soon as the response is written, so a fire-and-forget `void
+  // runCampaign(...)` never ran to completion — campaigns stayed stuck at
+  // status "sending" with every counter still at 0. Awaiting keeps the
+  // function alive until the channels have been delivered and recorded.
+  await runCampaign(campaign._id.toString(), users, input);
 
   sendResponse(res, {
     statusCode: 202,
@@ -238,20 +242,36 @@ async function runCampaign(
     pushData?: Record<string, string>;
   },
 ) {
-  try {
-    if (input.channels.email) {
-      await runEmail(campaignId, users, input.subject, input.bodyHtml);
-    }
-    if (input.channels.fcm) {
-      await runFcm(campaignId, users, input);
-    }
+  // Run each channel independently: a failure in email must not stop FCM
+  // from being attempted, and vice versa. Each runner records its own stats,
+  // so the campaign still reflects whatever did complete.
+  const channelErrors: string[] = [];
 
+  if (input.channels.email) {
+    try {
+      await runEmail(campaignId, users, input.subject, input.bodyHtml);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      channelErrors.push(`email: ${message}`);
+      console.error(`[notification] email channel failed for ${campaignId}:`, err);
+    }
+  }
+
+  if (input.channels.fcm) {
+    try {
+      await runFcm(campaignId, users, input);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      channelErrors.push(`fcm: ${message}`);
+      console.error(`[notification] fcm channel failed for ${campaignId}:`, err);
+    }
+  }
+
+  try {
     const campaign = await NotificationCampaign.findById(campaignId);
     if (!campaign) return;
-    const failed =
-      campaign.email.failed + campaign.fcm.failed;
-    const delivered =
-      campaign.email.delivered + campaign.fcm.delivered;
+    const failed = campaign.email.failed + campaign.fcm.failed;
+    const delivered = campaign.email.delivered + campaign.fcm.delivered;
     const attempted =
       (campaign.email.attempted || 0) + (campaign.fcm.attempted || 0);
     let status: 'completed' | 'partial' | 'failed' = 'completed';
@@ -259,15 +279,30 @@ async function runCampaign(
     else if (failed > 0) status = 'partial';
     campaign.status = status;
     campaign.completedAt = new Date();
+    if (channelErrors.length > 0) {
+      campaign.errorMessage = channelErrors.join('; ');
+    }
     await campaign.save();
   } catch (err) {
     await NotificationCampaign.findByIdAndUpdate(campaignId, {
       status: 'failed',
-      errorMessage: err instanceof Error ? err.message : 'unknown',
+      errorMessage:
+        channelErrors.length > 0
+          ? channelErrors.join('; ')
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
       completedAt: new Date(),
     });
   }
 }
+
+/**
+ * How many emails to send at once. Sending one-by-one to ~110 recipients
+ * took longer than the serverless function's budget, so the campaign was
+ * killed mid-flight and the counters were never written.
+ */
+const EMAIL_CONCURRENCY = 10;
 
 async function runEmail(
   campaignId: string,
@@ -277,27 +312,39 @@ async function runEmail(
 ) {
   const stats: IChannelStats = { attempted: 0, delivered: 0, failed: 0, invalidTokens: [] };
   const attempts: DeliveryAttemptRow[] = [];
-  for (const u of users) {
-    if (!u.email) continue;
-    stats.attempted += 1;
-    try {
-      await sendEmail({ to: u.email, subject, html: bodyHtml });
-      stats.delivered += 1;
-      attempts.push({
-        userId: u._id,
-        recipient: u.email,
-        status: 'delivered',
-      });
-    } catch (err) {
-      stats.failed += 1;
-      attempts.push({
-        userId: u._id,
-        recipient: u.email,
-        status: 'failed',
-        errorMessage: err instanceof Error ? err.message : 'unknown',
-      });
+
+  const targets = users.filter((u): u is { _id: Types.ObjectId; email: string; firstName?: string } =>
+    Boolean(u.email),
+  );
+  stats.attempted = targets.length;
+
+  // Bounded concurrency — enough parallelism to finish inside the function
+  // budget without tripping SMTP rate limits.
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < targets.length) {
+      const index = cursor++;
+      const u = targets[index];
+      try {
+        await sendEmail({ to: u.email, subject, html: bodyHtml });
+        stats.delivered += 1;
+        attempts.push({ userId: u._id, recipient: u.email, status: 'delivered' });
+      } catch (err) {
+        stats.failed += 1;
+        attempts.push({
+          userId: u._id,
+          recipient: u.email,
+          status: 'failed',
+          errorMessage: err instanceof Error ? err.message : 'unknown',
+        });
+      }
     }
-  }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(EMAIL_CONCURRENCY, targets.length) }, () => worker()),
+  );
+
   await NotificationCampaign.findByIdAndUpdate(campaignId, { email: stats });
   await recordDeliveries(campaignId, 'email', attempts);
 }
