@@ -579,6 +579,50 @@ const getCampaign = asyncHandler(async (req: Request, res) => {
   });
 });
 
+// ── deleteCampaign ────────────────────────────────────────────────────────
+
+/**
+ * Delete a campaign and its per-recipient delivery rows.
+ *
+ * A campaign still in flight cannot be deleted — the delivery loop holds a
+ * reference to it and would keep writing counters to a document that no
+ * longer exists. Wait for it to settle, then delete.
+ */
+const deleteCampaign = asyncHandler(async (req: Request, res) => {
+  const id = req.params.id;
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, 'Invalid campaign id.');
+  }
+
+  const campaign = await NotificationCampaign.findById(id).lean();
+  if (!campaign) throw new ApiError(404, 'Campaign not found.');
+
+  if (campaign.status === 'sending' || campaign.status === 'queued') {
+    throw new ApiError(
+      409,
+      'This campaign is still running. Wait for it to finish before deleting.',
+    );
+  }
+
+  // The delivery rows belong to the campaign — remove them too, otherwise
+  // they linger forever with no way to reach them from the panel.
+  const deletedDeliveries = await NotificationDelivery.deleteMany({
+    campaignId: new Types.ObjectId(id),
+  });
+
+  await NotificationCampaign.findByIdAndDelete(id);
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Campaign deleted',
+    data: {
+      campaignId: id,
+      deletedDeliveries: deletedDeliveries.deletedCount ?? 0,
+    },
+  });
+});
+
 // ── listDeliveries ────────────────────────────────────────────────────────
 
 const listDeliveries = asyncHandler(async (req: Request, res) => {
@@ -641,5 +685,6 @@ export const notificationController = {
   sendNotification,
   listCampaigns,
   getCampaign,
+  deleteCampaign,
   listDeliveries,
 };

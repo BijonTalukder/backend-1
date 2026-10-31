@@ -306,6 +306,13 @@ route.get(
   ...adminAuth,
   notificationController.listDeliveries,
 );
+// DELETE is a distinct method, so it does not collide with the GET below,
+// but it is declared alongside the other :id routes for readability.
+route.delete(
+  '/admin/notifications/:id',
+  ...adminAuth,
+  notificationController.deleteCampaign,
+);
 route.get(
   '/admin/notifications/:id',
   ...adminAuth,
