@@ -355,6 +355,13 @@ route.get('/admin/payment-methods', ...adminAuth, adminController.getPaymentMeth
 route.get('/admin/business-types', ...adminAuth, adminController.getBusinessTypeMix);
 route.get('/admin/top-businesses', ...adminAuth, adminController.getTopBusinessesByRevenue);
 route.get('/admin/auth-providers', ...adminAuth, adminController.getAuthProviderSplit);
+// Live activity - today's counters, the latest transactions, the most
+// recent sign-ins, the activity trend and the top spending categories.
+route.get('/admin/today-activity', ...adminAuth, adminController.getTodayActivity);
+route.get('/admin/latest-transactions', ...adminAuth, adminController.getLatestTransactions);
+route.get('/admin/recent-logins', ...adminAuth, adminController.getRecentLogins);
+route.get('/admin/activity-trend', ...adminAuth, adminController.getActivityTrend);
+route.get('/admin/top-categories', ...adminAuth, adminController.getTopCategories);
 
 route.get('/admin/users', ...adminAuth, adminController.listUsers);
 route.get('/admin/businesses', ...adminAuth, adminController.listBusinesses);

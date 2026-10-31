@@ -18,11 +18,11 @@ export interface ResolvedDateRange {
 /**
  * Returns the current date shifted to the local timezone.
  */
-const getLocalNow = (offsetMinutes: number = DHAKA_OFFSET_MINUTES): Date => {
-  const utcNow = new Date();
-  const utcMs = utcNow.getTime() + utcNow.getTimezoneOffset() * 60000;
-  return new Date(utcMs + offsetMinutes * 60000);
-};
+const getLocalNow = (offsetMinutes: number = DHAKA_OFFSET_MINUTES): Date =>
+  // The offset already IS the target timezone, so the host's own offset must
+  // not be mixed in — doing so shifts "today" by the host delta and lands on
+  // the wrong calendar day for roughly a quarter of all hours.
+  new Date(Date.now() + offsetMinutes * 60000);
 
 /**
  * Converts local year, month (0-11), day, hour, min, sec to a UTC Date.

@@ -193,6 +193,8 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
 
 // Indexes
 transactionSchema.index({ business: 1, date: -1 });
+// "Latest transactions" sorts by insertion time, not the (backdatable) date field.
+transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ business: 1, member: 1, date: -1 });
 transactionSchema.index({ business: 1, type: 1, date: -1 });
 transactionSchema.index({ business: 1, settlementStatus: 1 });

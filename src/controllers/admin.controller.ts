@@ -14,6 +14,10 @@ import Sale from '../models/sale.model';
 import Customer from '../models/customer.model';
 import Supplier from '../models/supplier.model';
 import Transaction from '../models/transaction.model';
+import {
+  resolveDateRange,
+  DHAKA_OFFSET_MINUTES,
+} from '../utils/timezone';
 
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   const n = Number(value);
@@ -367,6 +371,351 @@ export const getAuthProviderSplit = asyncHandler(async (_req: Request, res: Resp
   });
 });
 
+// ── Live activity ───────────────────────────────────────────────────────────
+//
+// "Today" always means the Asia/Dhaka calendar day. resolveDateRange gives
+// start-inclusive / end-exclusive UTC boundaries, so a transaction recorded
+// at 23:59 Dhaka lands in today and 00:00 tomorrow does not.
+//
+// Two different timestamps exist on a transaction and they answer different
+// questions:
+//   • createdAt — when the row was written. The truthful activity measure.
+//   • date      — the day the user filed it under. Backdatable, so it can
+//                 point at a different day than createdAt.
+// Both are reported so the admin can see the difference.
+
+/** Human label for a day, e.g. "1 November 2026", in Dhaka time. */
+function formatDhakaDay(date: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+/**
+ * Every counter the Dashboard's "Today" card needs, plus today's hourly
+ * distribution — one endpoint so the page does not need four round-trips.
+ */
+export const getTodayActivity = asyncHandler(async (_req: Request, res: Response) => {
+  const range = resolveDateRange({ preset: 'today' }, DHAKA_OFFSET_MINUTES);
+  const { start, endExclusive } = range;
+
+  const [
+    transactionsRecordedToday,
+    transactionsDatedToday,
+    backdatedToday,
+    usersLoggedInToday,
+    activeBusinessesToday,
+    hourlyRows,
+  ] = await Promise.all([
+    // Recorded today — the insertion time.
+    Transaction.countDocuments({ createdAt: { $gte: start, $lt: endExclusive } }),
+    // Dated today — the day the user filed it under.
+    Transaction.countDocuments({ date: { $gte: start, $lt: endExclusive } }),
+    // Filed under today but actually written before today.
+    Transaction.countDocuments({
+      date: { $gte: start, $lt: endExclusive },
+      createdAt: { $lt: start },
+    }),
+    User.countDocuments({ lastLogin: { $gte: start, $lt: endExclusive } }),
+    Transaction.distinct('business', { date: { $gte: start, $lt: endExclusive } }),
+    Transaction.aggregate<{ _id: string; count: number }>([
+      { $match: { createdAt: { $gte: start, $lt: endExclusive } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: '%H',
+              date: '$createdAt',
+              timezone: 'Asia/Dhaka',
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+
+  const hourlyCounts = new Map(hourlyRows.map((h) => [Number(h._id), h.count]));
+  const hourly = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    count: hourlyCounts.get(hour) ?? 0,
+  }));
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Today activity fetched',
+    data: {
+      dateLabel: formatDhakaDay(start),
+      start,
+      end: endExclusive,
+      transactionsRecordedToday,
+      transactionsDatedToday,
+      backdatedToday,
+      usersLoggedInToday,
+      activeBusinessesToday: activeBusinessesToday.length,
+      hourly,
+    },
+  });
+});
+
+/**
+ * The newest transactions by insertion time, with the related business,
+ * member and category names hydrated in a single aggregation (no N+1).
+ */
+export const getLatestTransactions = asyncHandler(async (req: Request, res: Response) => {
+  const safeLimit = clampInt(req.query.limit, 20, 1, 100);
+
+  const rows = await Transaction.aggregate<{
+    _id: unknown;
+    type: string;
+    amount: number;
+    paymentMethod: string | null;
+    settlementStatus: string;
+    note: string | null;
+    date: Date;
+    createdAt: Date;
+    businessName: string | null;
+    memberName: string | null;
+    categoryName: string | null;
+  }>([
+    { $sort: { createdAt: -1 } },
+    { $limit: safeLimit },
+    {
+      $lookup: {
+        from: 'businesses',
+        localField: 'business',
+        foreignField: '_id',
+        as: 'businessDoc',
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'member',
+        foreignField: '_id',
+        as: 'memberDoc',
+      },
+    },
+    {
+      $lookup: {
+        from: 'transactioncategories',
+        localField: 'category',
+        foreignField: '_id',
+        as: 'categoryDoc',
+      },
+    },
+    {
+      $project: {
+        type: 1,
+        amount: 1,
+        paymentMethod: 1,
+        settlementStatus: 1,
+        note: 1,
+        date: 1,
+        createdAt: 1,
+        businessName: { $ifNull: [{ $first: '$businessDoc.name' }, null] },
+        memberName: {
+          $ifNull: [
+            {
+              $concat: [
+                { $ifNull: [{ $first: '$memberDoc.firstName' }, ''] },
+                ' ',
+                { $ifNull: [{ $first: '$memberDoc.lastName' }, ''] },
+              ],
+            },
+            null,
+          ],
+        },
+        categoryName: { $ifNull: [{ $first: '$categoryDoc.name' }, null] },
+      },
+    },
+  ]);
+
+  const items = rows.map((t) => ({
+    id: String(t._id),
+    type: t.type,
+    amount: t.amount ?? 0,
+    paymentMethod: t.paymentMethod ?? null,
+    settlementStatus: t.settlementStatus,
+    note: t.note ?? null,
+    businessName: t.businessName ?? null,
+    memberName: t.memberName?.trim() ? t.memberName.trim() : null,
+    categoryName: t.categoryName ?? null,
+    datedAt: t.date,
+    recordedAt: t.createdAt,
+  }));
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Latest transactions fetched',
+    data: items,
+  });
+});
+
+/**
+ * The most recent successful sign-ins. Users who have never logged in have
+ * no lastLogin and are simply absent.
+ */
+export const getRecentLogins = asyncHandler(async (req: Request, res: Response) => {
+  const safeLimit = clampInt(req.query.limit, 20, 1, 100);
+
+  const docs = await User.find({ lastLogin: { $ne: null } })
+    .sort({ lastLogin: -1 })
+    .limit(safeLimit)
+    .select('firstName lastName email role authProvider lastLogin createdAt')
+    .lean();
+
+  const items = docs.map((u) => ({
+    id: String(u._id),
+    firstName: u.firstName,
+    lastName: u.lastName,
+    email: u.email,
+    role: u.role,
+    authProvider: u.authProvider,
+    lastLoginAt: u.lastLogin,
+    registeredAt: u.createdAt,
+  }));
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Recent logins fetched',
+    data: items,
+  });
+});
+
+/**
+ * Daily activity: transactions recorded vs. users who logged in, over the
+ * last N days. Two sources, one dense series — gaps are zero-filled so the
+ * chart never skips a day.
+ */
+export const getActivityTrend = asyncHandler(async (req: Request, res: Response) => {
+  const safeDays = clampInt(req.query.days, 30, 1, 365);
+  // "Today" gives the Dhaka calendar boundaries; the window then walks
+  // backwards `days - 1` days from the start of today.
+  const today = resolveDateRange({ preset: 'today' }, DHAKA_OFFSET_MINUTES);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const start = new Date(today.start.getTime() - (safeDays - 1) * dayMs);
+  const endExclusive = today.endExclusive;
+
+  const [txnRows, loginRows] = await Promise.all([
+    Transaction.aggregate<{ _id: string; count: number }>([
+      { $match: { createdAt: { $gte: start, $lt: endExclusive } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$createdAt',
+              timezone: 'Asia/Dhaka',
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    User.aggregate<{ _id: string; count: number }>([
+      { $match: { lastLogin: { $gte: start, $lt: endExclusive } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$lastLogin',
+              timezone: 'Asia/Dhaka',
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+
+  const txnCounts = new Map(txnRows.map((r) => [r._id, r.count]));
+  const loginCounts = new Map(loginRows.map((r) => [r._id, r.count]));
+
+  const points = fillDailyBuckets(
+    start,
+    safeDays,
+    txnCounts,
+    (key, bucket) => ({
+      date: key,
+      transactions: bucket ?? 0,
+      logins: loginCounts.get(key) ?? 0,
+    }),
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Activity trend fetched',
+    data: { start, end: endExclusive, days: safeDays, points },
+  });
+});
+
+/**
+ * The categories that moved the most money over the window.
+ */
+export const getTopCategories = asyncHandler(async (req: Request, res: Response) => {
+  const safeDays = clampInt(req.query.days, 30, 1, 365);
+  const today = resolveDateRange({ preset: 'today' }, DHAKA_OFFSET_MINUTES);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const start = new Date(today.start.getTime() - (safeDays - 1) * dayMs);
+  const endExclusive = today.endExclusive;
+
+  const rows = await Transaction.aggregate<{
+    _id: { type: string; category: unknown };
+    name: string | null;
+    amount: number;
+    count: number;
+  }>([
+    {
+      $match: {
+        date: { $gte: start, $lt: endExclusive },
+        type: { $in: ['income', 'expense'] },
+      },
+    },
+    {
+      $lookup: {
+        from: 'transactioncategories',
+        localField: 'category',
+        foreignField: '_id',
+        as: 'categoryDoc',
+      },
+    },
+    { $unwind: { path: '$categoryDoc', preserveNullAndEmptyArrays: true } },
+    {
+      $group: {
+        _id: { type: '$type', category: '$category' },
+        name: { $first: '$categoryDoc.name' },
+        amount: { $sum: '$amount' },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { amount: -1 } },
+    { $limit: 25 },
+  ]);
+
+  const items = rows.map((r) => ({
+    name: r.name ?? 'Uncategorised',
+    type: r._id.type === 'income' ? 'income' : 'expense',
+    amount: r.amount ?? 0,
+    count: r.count ?? 0,
+  }));
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Top categories fetched',
+    data: { days: safeDays, items },
+  });
+});
+
 // ── Lists ──────────────────────────────────────────────────────────────────
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
@@ -672,6 +1021,11 @@ export const listTransactions = asyncHandler(async (req: Request, res: Response)
 
 export const adminController = {
   getOverview,
+  getTodayActivity,
+  getLatestTransactions,
+  getRecentLogins,
+  getActivityTrend,
+  getTopCategories,
   getStats,
   getUserGrowth,
   getRecentSignups,
