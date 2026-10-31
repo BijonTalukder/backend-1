@@ -183,6 +183,11 @@ async function recordDeliveries(
 // ── sendNotification ───────────────────────────────────────────────────────
 
 const sendNotification = asyncHandler(async (req: Request, res) => {
+  // Clear out any campaign left hanging by a previous timed-out run
+  // before starting a new one, so the History tab never shows a stale
+  // "sending" row.
+  await reconcileStaleCampaigns();
+
   const input = validateSendInput(req.body ?? {});
 
   const query = buildAudienceQuery(input.audience);
@@ -304,6 +309,16 @@ async function runCampaign(
  */
 const EMAIL_CONCURRENCY = 10;
 
+/**
+ * How many completed sends to buffer before flushing to Mongo.
+ *
+ * Stats are flushed as sends complete rather than only at the very end. If
+ * the function is killed by its time budget mid-campaign, the counters and
+ * the delivery rows for everything already sent are still on record — the
+ * campaign no longer sits at 0/0/0.
+ */
+const EMAIL_FLUSH_BATCH = 10;
+
 async function runEmail(
   campaignId: string,
   users: Array<{ _id: Types.ObjectId; email?: string; firstName?: string }>,
@@ -311,16 +326,30 @@ async function runEmail(
   bodyHtml: string,
 ) {
   const stats: IChannelStats = { attempted: 0, delivered: 0, failed: 0, invalidTokens: [] };
-  const attempts: DeliveryAttemptRow[] = [];
+  let attempts: DeliveryAttemptRow[] = [];
 
   const targets = users.filter((u): u is { _id: Types.ObjectId; email: string; firstName?: string } =>
     Boolean(u.email),
   );
   stats.attempted = targets.length;
 
+  // Publish the attempted count straight away so the panel shows the real
+  // size of the job even while the sends are still in flight.
+  await NotificationCampaign.findByIdAndUpdate(campaignId, { email: stats });
+
   // Bounded concurrency — enough parallelism to finish inside the function
   // budget without tripping SMTP rate limits.
   let cursor = 0;
+  let pendingFlush: Promise<void> = Promise.resolve();
+
+  const flush = async (): Promise<void> => {
+    if (attempts.length === 0) return;
+    const batch = attempts;
+    attempts = [];
+    await recordDeliveries(campaignId, 'email', batch);
+    await NotificationCampaign.findByIdAndUpdate(campaignId, { email: stats });
+  };
+
   const worker = async (): Promise<void> => {
     while (cursor < targets.length) {
       const index = cursor++;
@@ -338,6 +367,12 @@ async function runEmail(
           errorMessage: err instanceof Error ? err.message : 'unknown',
         });
       }
+
+      if (attempts.length >= EMAIL_FLUSH_BATCH) {
+        // Chain flushes so two workers never write the same rows twice.
+        pendingFlush = pendingFlush.then(() => flush());
+        await pendingFlush;
+      }
     }
   };
 
@@ -345,8 +380,10 @@ async function runEmail(
     Array.from({ length: Math.min(EMAIL_CONCURRENCY, targets.length) }, () => worker()),
   );
 
+  // Final flush for any remainder.
+  await pendingFlush;
+  await flush();
   await NotificationCampaign.findByIdAndUpdate(campaignId, { email: stats });
-  await recordDeliveries(campaignId, 'email', attempts);
 }
 
 async function runFcm(
@@ -413,6 +450,49 @@ async function runFcm(
   }
   await NotificationCampaign.findByIdAndUpdate(campaignId, { fcm: stats });
   await recordDeliveries(campaignId, 'fcm', attempts);
+}
+
+/**
+ * Reconcile campaigns that were killed mid-flight.
+ *
+ * A serverless invocation is frozen once it stops being awaited, so a
+ * campaign whose function hit its time budget can be left at status
+ * "sending" forever. On every send we sweep the stale ones: whatever was
+ * delivered before the kill is already recorded, so the campaign is
+ * marked "partial" (or "failed" if nothing got through) instead of
+ * pretending to still be running.
+ */
+async function reconcileStaleCampaigns(): Promise<void> {
+  try {
+    const staleBefore = new Date(Date.now() - 5 * 60 * 1000);
+    const stale = await NotificationCampaign.find({
+      status: { $in: ['queued', 'sending'] },
+      startedAt: { $lt: staleBefore },
+    }).select('_id email fcm').lean();
+
+    for (const campaign of stale) {
+      const delivered = campaign.email.delivered + campaign.fcm.delivered;
+      const attempted =
+        (campaign.email.attempted || 0) + (campaign.fcm.attempted || 0);
+      const failed = campaign.email.failed + campaign.fcm.failed;
+
+      let status: 'partial' | 'failed' = 'partial';
+      if (delivered === 0 && attempted === 0) status = 'failed';
+      else if (delivered === 0) status = 'failed';
+
+      await NotificationCampaign.findByIdAndUpdate(campaign._id, {
+        status,
+        completedAt: new Date(),
+        errorMessage:
+          'Campaign was interrupted by the server time limit. Partial results were kept.',
+      });
+      console.warn(
+        `[notification] reconciled stale campaign ${campaign._id.toString()} -> ${status} (delivered=${delivered}, failed=${failed})`,
+      );
+    }
+  } catch (err) {
+    console.error('[notification] failed to reconcile stale campaigns:', err);
+  }
 }
 
 // ── listCampaigns ──────────────────────────────────────────────────────────
