@@ -178,9 +178,11 @@ export async function aggregateMonthlyTotals(
   const { start, endExclusive } = resolveDateRange({ preset: 'lastmonth' });
 
   // Per-business totals and counts.
+  //
+  // The type lives inside _id because that is where $group puts it — there
+  // is no top-level "type" field on the result rows.
   const rows = await Transaction.aggregate<{
     _id: { business: Types.ObjectId; type: string };
-    type: string;
     total: number;
     count: number;
   }>([
@@ -249,8 +251,9 @@ export async function aggregateMonthlyTotals(
       (result.perBusiness.get(businessKey) ?? 0) + count,
     );
     result.transactionCount += count;
-    if (row.type === 'income') result.income += row.total ?? 0;
-    else if (row.type === 'expense') result.expense += row.total ?? 0;
+    const type = String(row._id.type ?? '');
+    if (type === 'income') result.income += row.total ?? 0;
+    else if (type === 'expense') result.expense += row.total ?? 0;
   }
 
   for (const row of categoryRows) {
