@@ -420,7 +420,30 @@ export const getTodayActivity = asyncHandler(async (_req: Request, res: Response
       createdAt: { $lt: start },
     }),
     User.countDocuments({ lastLogin: { $gte: start, $lt: endExclusive } }),
-    Transaction.distinct('business', { date: { $gte: start, $lt: endExclusive } }),
+    // Businesses that are both active and saw a transaction today. A
+    // deactivated business can still hold historical rows, so counting the
+    // raw distinct ids would overstate how many businesses are running.
+    Business.aggregate<{ count: number }>([
+      { $match: { status: true } },
+      {
+        $lookup: {
+          from: 'transactions',
+          let: { businessId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$business', '$businessId'] },
+                date: { $gte: start, $lt: endExclusive },
+              },
+            },
+            { $count: 'count' },
+          ],
+          as: 'todayActivity',
+        },
+      },
+      { $match: { todayActivity: { $gt: [] } } },
+      { $count: 'count' },
+    ]),
     Transaction.aggregate<{ _id: string; count: number }>([
       { $match: { createdAt: { $gte: start, $lt: endExclusive } } },
       {
@@ -456,7 +479,7 @@ export const getTodayActivity = asyncHandler(async (_req: Request, res: Response
       transactionsDatedToday,
       backdatedToday,
       usersLoggedInToday,
-      activeBusinessesToday: activeBusinessesToday.length,
+      activeBusinessesToday: activeBusinessesToday[0]?.count ?? 0,
       hourly,
     },
   });
