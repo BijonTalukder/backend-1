@@ -16,7 +16,7 @@ import NotificationDelivery, {
   type DeliveryChannel,
   type DeliveryStatus,
 } from '../models/notification-delivery.model';
-import sendEmail from '../utils/sendEmail';
+import sendEmail, { isMailboxLimitError } from '../utils/sendEmail';
 import { sendFcmToTokens, type FcmPayload } from '../utils/sendPush';
 import {
   NOTIFICATION_TEMPLATES,
@@ -322,6 +322,12 @@ const EMAIL_MAX_ATTEMPTS = 3;
 const EMAIL_RETRY_DELAYS = [2_000, 5_000];
 
 function isTransientEmailError(message: string): boolean {
+  // A hard daily-cap error is NOT transient: retrying the same account
+  // just burns the function's time budget. sendEmail already fails over to
+  // the secondary account for those, so let the failure through.
+  if (isMailboxLimitError(message)) {
+    return /421|4.3.0|temporary|try again later/i.test(message);
+  }
   return /421|4.3.0|temporary|try again later|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|too many connections/i.test(
     message,
   );
