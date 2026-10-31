@@ -12,6 +12,10 @@ import NotificationCampaign, {
   type IAudienceFilter,
   type IChannelStats,
 } from '../models/notification-campaign.model';
+import NotificationDelivery, {
+  type DeliveryChannel,
+  type DeliveryStatus,
+} from '../models/notification-delivery.model';
 import sendEmail from '../utils/sendEmail';
 import { sendFcmToTokens, type FcmPayload } from '../utils/sendPush';
 import {
@@ -131,6 +135,51 @@ const composeAi = asyncHandler(async (req: Request, res) => {
   });
 });
 
+// ── delivery log ──────────────────────────────────────────────────────────
+
+/**
+ * One row per recipient × channel attempt, pending persistence.
+ * `campaignId` and `channel` are supplied by recordDeliveries().
+ */
+interface DeliveryAttemptRow {
+  userId: Types.ObjectId;
+  recipient: string;
+  status: DeliveryStatus;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+/**
+ * Bulk-write the per-recipient delivery log for a channel. Failures here
+ * must never fail the campaign, so errors are logged and swallowed.
+ */
+async function recordDeliveries(
+  campaignId: string,
+  channel: DeliveryChannel,
+  attempts: DeliveryAttemptRow[],
+): Promise<void> {
+  if (attempts.length === 0) return;
+  try {
+    await NotificationDelivery.insertMany(
+      attempts.map((a) => ({
+        campaignId: new Types.ObjectId(campaignId),
+        userId: a.userId,
+        channel,
+        status: a.status,
+        recipient: a.recipient,
+        errorCode: a.errorCode,
+        errorMessage: a.errorMessage,
+        attemptedAt: new Date(),
+      })),
+    );
+  } catch (err) {
+    console.error(
+      `[notification] Failed to record ${channel} delivery log for campaign ${campaignId}:`,
+      err,
+    );
+  }
+}
+
 // ── sendNotification ───────────────────────────────────────────────────────
 
 const sendNotification = asyncHandler(async (req: Request, res) => {
@@ -222,27 +271,40 @@ async function runCampaign(
 
 async function runEmail(
   campaignId: string,
-  users: Array<{ email?: string; firstName?: string }>,
+  users: Array<{ _id: Types.ObjectId; email?: string; firstName?: string }>,
   subject: string,
   bodyHtml: string,
 ) {
   const stats: IChannelStats = { attempted: 0, delivered: 0, failed: 0, invalidTokens: [] };
+  const attempts: DeliveryAttemptRow[] = [];
   for (const u of users) {
     if (!u.email) continue;
     stats.attempted += 1;
     try {
       await sendEmail({ to: u.email, subject, html: bodyHtml });
       stats.delivered += 1;
-    } catch {
+      attempts.push({
+        userId: u._id,
+        recipient: u.email,
+        status: 'delivered',
+      });
+    } catch (err) {
       stats.failed += 1;
+      attempts.push({
+        userId: u._id,
+        recipient: u.email,
+        status: 'failed',
+        errorMessage: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
   await NotificationCampaign.findByIdAndUpdate(campaignId, { email: stats });
+  await recordDeliveries(campaignId, 'email', attempts);
 }
 
 async function runFcm(
   campaignId: string,
-  users: Array<{ fcmTokens?: { token: string }[] }>,
+  users: Array<{ _id: Types.ObjectId; fcmTokens?: { token: string }[] }>,
   input: {
     pushTitle?: string;
     pushBody?: string;
@@ -250,7 +312,12 @@ async function runFcm(
     subject: string;
   },
 ) {
-  const tokens = users.flatMap((u) => (u.fcmTokens ?? []).map((t) => t.token));
+  // Keep the token → user mapping so every push attempt can be attributed
+  // to a recipient in the delivery log.
+  const tokenOwners = users.flatMap((u) =>
+    (u.fcmTokens ?? []).map((t) => ({ token: t.token, userId: u._id })),
+  );
+  const tokens = tokenOwners.map((t) => t.token);
   const stats: IChannelStats = { attempted: 0, delivered: 0, failed: 0, invalidTokens: [] };
   if (tokens.length === 0) {
     await NotificationCampaign.findByIdAndUpdate(campaignId, { fcm: stats });
@@ -267,6 +334,29 @@ async function runFcm(
   stats.failed = result.failureCount;
   stats.invalidTokens = result.invalidTokens;
 
+  // sendFcmToTokens reports per-token failures; index them so we can write
+  // one delivery row per token with its own reason.
+  const errorByToken = new Map<string, { code?: string; message: string }>();
+  for (const e of result.errors) {
+    errorByToken.set(e.token, { code: e.code, message: e.message });
+  }
+  const ownerByToken = new Map<string, Types.ObjectId>();
+  for (const t of tokenOwners) ownerByToken.set(t.token, t.userId);
+
+  const attempts: DeliveryAttemptRow[] = tokenOwners.map(({ token, userId }) => {
+    const failure = errorByToken.get(token);
+    if (failure) {
+      return {
+        userId,
+        recipient: token,
+        status: 'failed',
+        errorCode: failure.code,
+        errorMessage: failure.message,
+      };
+    }
+    return { userId, recipient: token, status: 'delivered' };
+  });
+
   // Prune dead tokens so the next send is shorter.
   if (result.invalidTokens.length > 0) {
     await User.updateMany(
@@ -275,6 +365,7 @@ async function runFcm(
     );
   }
   await NotificationCampaign.findByIdAndUpdate(campaignId, { fcm: stats });
+  await recordDeliveries(campaignId, 'fcm', attempts);
 }
 
 // ── listCampaigns ──────────────────────────────────────────────────────────
@@ -319,6 +410,42 @@ const getCampaign = asyncHandler(async (req: Request, res) => {
   });
 });
 
+// ── listDeliveries ────────────────────────────────────────────────────────
+
+const listDeliveries = asyncHandler(async (req: Request, res) => {
+  const id = req.params.id;
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, 'Invalid campaign id.');
+  }
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const skip = (page - 1) * limit;
+
+  const channelParam = typeof req.query.channel === 'string' ? req.query.channel : '';
+  const filter: Record<string, unknown> = {
+    campaignId: new Types.ObjectId(id),
+  };
+  if (channelParam === 'email' || channelParam === 'fcm') {
+    filter.channel = channelParam;
+  }
+
+  const [items, total] = await Promise.all([
+    NotificationDelivery.find(filter)
+      .sort({ attemptedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    NotificationDelivery.countDocuments(filter),
+  ]);
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Deliveries fetched',
+    data: { items, total, page, limit },
+  });
+});
+
 // Expose template renderer for internal callers (admin previews the rendered
 // HTML on the fly without going through Gemini).
 export const renderNotificationTemplate = (
@@ -345,4 +472,5 @@ export const notificationController = {
   sendNotification,
   listCampaigns,
   getCampaign,
+  listDeliveries,
 };

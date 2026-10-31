@@ -299,6 +299,13 @@ route.get(
   ...adminAuth,
   notificationController.listCampaigns,
 );
+// NOTE: must be registered before '/admin/notifications/:id' — Express matches
+// in declaration order, so the :id route would otherwise swallow this path.
+route.get(
+  '/admin/notifications/:id/deliveries',
+  ...adminAuth,
+  notificationController.listDeliveries,
+);
 route.get(
   '/admin/notifications/:id',
   ...adminAuth,
