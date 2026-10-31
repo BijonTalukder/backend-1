@@ -307,7 +307,25 @@ async function runCampaign(
  * took longer than the serverless function's budget, so the campaign was
  * killed mid-flight and the counters were never written.
  */
-const EMAIL_CONCURRENCY = 10;
+const EMAIL_CONCURRENCY = 5;
+
+/**
+ * How many times to retry a send that failed for a transient reason.
+ *
+ * Gmail replies "421-4.3.0 Temporary System Problem" when the account is
+ * momentarily rate-limited. Those recipients were never contacted, so it
+ * is worth trying again rather than recording them as hard failures.
+ */
+const EMAIL_MAX_ATTEMPTS = 3;
+
+/** Backoff between retries, in milliseconds. */
+const EMAIL_RETRY_DELAYS = [2_000, 5_000];
+
+function isTransientEmailError(message: string): boolean {
+  return /421|4.3.0|temporary|try again later|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|too many connections/i.test(
+    message,
+  );
+}
 
 /**
  * How many completed sends to buffer before flushing to Mongo.
@@ -354,17 +372,35 @@ async function runEmail(
     while (cursor < targets.length) {
       const index = cursor++;
       const u = targets[index];
-      try {
-        await sendEmail({ to: u.email, subject, html: bodyHtml });
-        stats.delivered += 1;
-        attempts.push({ userId: u._id, recipient: u.email, status: 'delivered' });
-      } catch (err) {
+      let lastError = 'unknown';
+
+      for (let attempt = 1; attempt <= EMAIL_MAX_ATTEMPTS; attempt++) {
+        try {
+          await sendEmail({ to: u.email, subject, html: bodyHtml });
+          stats.delivered += 1;
+          attempts.push({ userId: u._id, recipient: u.email, status: 'delivered' });
+          lastError = '';
+          break;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : 'unknown';
+          // Only transient failures (rate limits, dropped sockets) are worth
+          // retrying — a bad address will fail the same way every time.
+          const canRetry =
+            attempt < EMAIL_MAX_ATTEMPTS && isTransientEmailError(lastError);
+          if (!canRetry) break;
+          await new Promise((resolve) =>
+            setTimeout(resolve, EMAIL_RETRY_DELAYS[attempt - 1] ?? 5_000),
+          );
+        }
+      }
+
+      if (lastError) {
         stats.failed += 1;
         attempts.push({
           userId: u._id,
           recipient: u.email,
           status: 'failed',
-          errorMessage: err instanceof Error ? err.message : 'unknown',
+          errorMessage: lastError,
         });
       }
 
