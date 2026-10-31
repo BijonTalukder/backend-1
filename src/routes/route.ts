@@ -23,6 +23,7 @@ import { paymentController } from '../controllers/payment.controller';
 import { reportController } from '../controllers/report.controller';
 import { notificationController } from '../controllers/notification.controller';
 import { adminController } from '../controllers/admin.controller';
+import { monthlyReportController } from '../controllers/monthlyReport.controller';
 
 const route: Router = express.Router();
 
@@ -317,6 +318,26 @@ route.get(
   '/admin/notifications/:id',
   ...adminAuth,
   notificationController.getCampaign,
+);
+
+// ── Admin monthly transaction report ─────────────────────────────────────
+// Each recipient gets a report computed from their own businesses for the
+// previous calendar month. One campaign per user, because a campaign stores
+// a single body and the report differs per person.
+route.get(
+  '/admin/monthly-report/users',
+  ...adminAuth,
+  monthlyReportController.listUsers,
+);
+route.get(
+  '/admin/monthly-report/preview',
+  ...adminAuth,
+  monthlyReportController.preview,
+);
+route.post(
+  '/admin/monthly-report/send',
+  ...adminAuth,
+  monthlyReportController.send,
 );
 
 // ── Admin platform aggregates (read-only) ────────────────────────────────
