@@ -25,6 +25,7 @@ export interface IPurchase extends Document {
   status: PurchaseStatus;
   date: Date;
   note?: string;
+  attachmentUrl?: string;
   createdBy: mongoose.Types.ObjectId;
   linkedTransaction?: mongoose.Types.ObjectId | null;
   createdAt: Date;
@@ -57,6 +58,7 @@ const purchaseSchema = new mongoose.Schema<IPurchase>(
     status: { type: String, enum: ['paid', 'partial', 'due'], default: 'due' },
     date: { type: Date, default: Date.now },
     note: { type: String, trim: true },
+    attachmentUrl: { type: String, trim: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     linkedTransaction: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
   },

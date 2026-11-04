@@ -14,6 +14,7 @@ export interface RecordEntryInput {
   category: Types.ObjectId;
   note?: string;
   reference?: string;
+  attachmentUrl?: string;
   createdBy: Types.ObjectId;
   member: Types.ObjectId;
   paymentMethod?: 'cash' | 'bank' | 'bkash' | 'nagad' | 'other';
@@ -37,6 +38,7 @@ export const recordLedgerEntry = async (input: RecordEntryInput, session: Client
         category: input.category,
         note: input.note,
         reference: input.reference,
+        attachmentUrl: input.attachmentUrl,
         createdBy: input.createdBy,
         member: input.member,
         paymentMethod: input.paymentMethod,
@@ -70,4 +72,19 @@ export const recordLedgerEntry = async (input: RecordEntryInput, session: Client
 export const balanceDeltaFor = (paymentMethod: string | undefined, amount: number) => {
   if (paymentMethod === 'cash') return { cashDelta: amount, bankDelta: 0 };
   return { cashDelta: 0, bankDelta: amount };
+};
+
+// Attachments (receipt photo / PDF) are uploaded straight to Cloudinary by the
+// client; the backend only stores the resulting URL. Accept http(s) URLs only so
+// a `javascript:` or `data:` URL can never end up rendered as a link.
+export const sanitizeAttachmentUrl = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const url = value.trim();
+  if (!url || url.length > 2048) return undefined;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || protocol === 'http:' ? url : undefined;
+  } catch {
+    return undefined;
+  }
 };

@@ -7,6 +7,7 @@ import { BusinessMembersModel } from '../models/business-members.model';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
+import { sanitizeAttachmentUrl } from '../utils/ledger';
 
 /* ─── Helper ──────────────────────────────────────────── */
 const getValidIds = (userId: any, businessId?: string) => {
@@ -50,6 +51,7 @@ const createTransaction = asyncHandler(async (req: Request, res, next) => {
     note,
     date,
     reference,
+    attachmentUrl: rawAttachmentUrl,
     paidFor = [],
     splitType = 'none',
     toMember,
@@ -107,6 +109,7 @@ const createTransaction = asyncHandler(async (req: Request, res, next) => {
     createdBy: objectUserId,
     note,
     reference,
+    attachmentUrl: sanitizeAttachmentUrl(rawAttachmentUrl),
     date: date ? new Date(date) : new Date(),
     paidFor: paidForParsed,
     splitType,
@@ -412,7 +415,7 @@ const updateTransaction = asyncHandler(async (req: Request, res, next) => {
     throw new ApiError(400, 'Cannot edit a fully settled transaction');
   }
 
-  const { type, amount, category, note, date, reference } = req.body;
+  const { type, amount, category, note, date, reference, attachmentUrl } = req.body;
 
   const updated = await Transaction.findByIdAndUpdate(
     id,
@@ -423,6 +426,7 @@ const updateTransaction = asyncHandler(async (req: Request, res, next) => {
       ...(note !== undefined && { note }),
       ...(date && { date: new Date(date) }),
       ...(reference !== undefined && { reference }),
+      ...(attachmentUrl !== undefined && { attachmentUrl: sanitizeAttachmentUrl(attachmentUrl) ?? '' }),
     },
     { new: true },
   )

@@ -9,7 +9,7 @@ import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
-import { recordLedgerEntry, balanceDeltaFor } from '../utils/ledger';
+import { recordLedgerEntry, balanceDeltaFor, sanitizeAttachmentUrl } from '../utils/ledger';
 import {
   claimOperation,
   findReplay,
@@ -37,10 +37,11 @@ const findOrCreatePaymentCategory = async (
 const receivePayment = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
   const {
-    businessId, customerId, amount, method = 'cash', note, date,
+    businessId, customerId, amount, method = 'cash', note, date, attachmentUrl: rawAttachmentUrl,
     clientId, operationId,
   } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
+  const attachmentUrl = sanitizeAttachmentUrl(rawAttachmentUrl);
 
   await requireMembership(objectBusinessId!, objectUserId);
 
@@ -94,6 +95,7 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
             amount: parsedAmount,
             method,
             note,
+            attachmentUrl,
             date: date ? new Date(date) : new Date(),
             createdBy: objectUserId,
           },
@@ -110,6 +112,7 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
           amount: parsedAmount,
           category: category._id as Types.ObjectId,
           note: note || `Payment from ${customer.name}`,
+          attachmentUrl,
           createdBy: objectUserId,
           member: objectUserId,
           paymentMethod: method,
@@ -157,10 +160,11 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
 const makePayment = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
   const {
-    businessId, supplierId, amount, method = 'cash', note, date,
+    businessId, supplierId, amount, method = 'cash', note, date, attachmentUrl: rawAttachmentUrl,
     clientId, operationId,
   } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
+  const attachmentUrl = sanitizeAttachmentUrl(rawAttachmentUrl);
 
   await requireMembership(objectBusinessId!, objectUserId);
 
@@ -213,6 +217,7 @@ const makePayment = asyncHandler(async (req: Request, res) => {
             amount: parsedAmount,
             method,
             note,
+            attachmentUrl,
             date: date ? new Date(date) : new Date(),
             createdBy: objectUserId,
           },
@@ -229,6 +234,7 @@ const makePayment = asyncHandler(async (req: Request, res) => {
           amount: parsedAmount,
           category: category._id as Types.ObjectId,
           note: note || `Payment to ${supplier.name}`,
+          attachmentUrl,
           createdBy: objectUserId,
           member: objectUserId,
           paymentMethod: method,

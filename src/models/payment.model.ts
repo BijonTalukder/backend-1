@@ -13,6 +13,7 @@ export interface IPayment extends Document {
   amount: number;
   method: string;
   note?: string;
+  attachmentUrl?: string;
   date: Date;
   createdBy: mongoose.Types.ObjectId;
   linkedTransaction?: mongoose.Types.ObjectId | null;
@@ -30,6 +31,7 @@ const paymentSchema = new mongoose.Schema<IPayment>(
     amount: { type: Number, required: true, min: 0.01 },
     method: { type: String, default: 'cash' },
     note: { type: String, trim: true },
+    attachmentUrl: { type: String, trim: true },
     date: { type: Date, default: Date.now },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     linkedTransaction: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },

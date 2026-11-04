@@ -7,12 +7,13 @@ import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
-import { recordLedgerEntry, balanceDeltaFor } from '../utils/ledger';
+import { recordLedgerEntry, balanceDeltaFor, sanitizeAttachmentUrl } from '../utils/ledger';
 
 const createExpense = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
-  const { businessId, categoryId, amount, paymentMethod = 'cash', note, date, attachmentUrl } = req.body;
+  const { businessId, categoryId, amount, paymentMethod = 'cash', note, date, attachmentUrl: rawAttachmentUrl } = req.body;
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
+  const attachmentUrl = sanitizeAttachmentUrl(rawAttachmentUrl);
 
   await requireMembership(objectBusinessId!, objectUserId);
 
@@ -60,6 +61,7 @@ const createExpense = asyncHandler(async (req: Request, res) => {
           amount: parsedAmount,
           category: category._id as Types.ObjectId,
           note: note || category.name,
+          attachmentUrl,
           createdBy: objectUserId,
           member: objectUserId,
           paymentMethod,

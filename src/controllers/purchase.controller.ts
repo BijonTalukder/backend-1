@@ -10,7 +10,7 @@ import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
 import { adjustStock } from '../utils/inventory';
-import { recordLedgerEntry, balanceDeltaFor } from '../utils/ledger';
+import { recordLedgerEntry, balanceDeltaFor, sanitizeAttachmentUrl } from '../utils/ledger';
 
 interface PurchaseItemInput {
   product: string;
@@ -22,7 +22,7 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
   const {
     businessId, supplierId, items, discount = 0,
-    paidAmount = 0, paymentMethod = 'cash', note, date,
+    paidAmount = 0, paymentMethod = 'cash', note, date, attachmentUrl: rawAttachmentUrl,
   } = req.body as {
     businessId: string;
     supplierId?: string;
@@ -31,9 +31,11 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
     paidAmount?: number;
     paymentMethod?: string;
     note?: string;
+    attachmentUrl?: string;
     date?: string;
   };
   const { objectBusinessId } = getValidIds(req.user?._id, businessId);
+  const attachmentUrl = sanitizeAttachmentUrl(rawAttachmentUrl);
 
   await requireMembership(objectBusinessId!, objectUserId);
 
@@ -125,6 +127,7 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
             status,
             date: date ? new Date(date) : new Date(),
             note,
+            attachmentUrl,
             createdBy: objectUserId,
           },
         ],
@@ -141,6 +144,7 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
           category: purchaseCategory._id as Types.ObjectId,
           note: `Purchase ${referenceNumber}`,
           reference: referenceNumber,
+          attachmentUrl,
           createdBy: objectUserId,
           member: objectUserId,
           paymentMethod: paymentMethod as any,

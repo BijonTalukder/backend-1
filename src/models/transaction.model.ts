@@ -27,6 +27,7 @@ export interface ITransaction extends Document {
   category: mongoose.Types.ObjectId;
   note?: string;
   reference?: string; // invoice/receipt no
+  attachmentUrl?: string; // receipt photo / PDF (Cloudinary URL)
 
   // ─── Who did it ─────────────────────────────────
   createdBy: mongoose.Types.ObjectId; // যে transaction add করেছে
@@ -114,6 +115,7 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
     },
     note: { type: String, trim: true },
     reference: { type: String, trim: true },
+    attachmentUrl: { type: String, trim: true },
 
     // Who
     createdBy: {
