@@ -233,7 +233,7 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {
   }
 
   if (!wantsOpeningBalanceChange) {
-    await Business.findByIdAndUpdate(businessId, updates, { new: true });
+    await Business.findByIdAndUpdate(businessId, updates, { returnDocument: 'after' });
   } else {
     // Opening balance is ledger-backed: re-sync the 'Opening balance'
     // adjustment transaction in the same session as the business update.
@@ -241,7 +241,7 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {
     try {
       await session.withTransaction(async () => {
         await Business.findByIdAndUpdate(businessId, updates, {
-          new: true,
+          returnDocument: 'after',
         }).session(session);
 
         await Transaction.deleteMany({
@@ -343,7 +343,7 @@ const completeOnboarding = asyncHandler(async (req: Request, res) => {
   const user = await User.findByIdAndUpdate(
     userId,
     { onboardingCompleted: true },
-    { new: true, select: '-password' },
+    { returnDocument: 'after', select: '-password' },
   );
 
   if (!user) throw new ApiError(404, 'User not found');

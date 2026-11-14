@@ -148,7 +148,7 @@ const getMyCategories = asyncHandler(async (req, res, next) => {
 
 const updateCategory = asyncHandler(async (req, res, next) => {
   const category = await Category.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
+    returnDocument: 'after',
   });
   sendResponse(res, {
     statusCode: 200,

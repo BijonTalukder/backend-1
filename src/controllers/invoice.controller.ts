@@ -192,7 +192,7 @@ const generateInvoice = asyncHandler(async (req: Request, res) => {
       transactions: txSnapshots,
       ...messFields,
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
 
   sendResponse(res, {

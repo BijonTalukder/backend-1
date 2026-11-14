@@ -77,7 +77,7 @@ const updateTransactionCategory = asyncHandler(
     const category = await TransactionCategory.findByIdAndUpdate(
       new Types.ObjectId(id),
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     sendResponse(res, {

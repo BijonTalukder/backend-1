@@ -428,7 +428,7 @@ const updateTransaction = asyncHandler(async (req: Request, res, next) => {
       ...(reference !== undefined && { reference }),
       ...(attachmentUrl !== undefined && { attachmentUrl: sanitizeAttachmentUrl(attachmentUrl) ?? '' }),
     },
-    { new: true },
+    { returnDocument: 'after' },
   )
     .populate('category', 'name type icon')
     .populate('member', 'firstName lastName')

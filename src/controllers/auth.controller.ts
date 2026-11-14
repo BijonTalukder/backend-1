@@ -163,7 +163,7 @@ const register = asyncHandler(async (req, res, next) => {
     }
   }
 
-  const hashedPassword = await bcrypt.hash(password, 12);
+  const hashedPassword = await bcrypt.hash(password, 10);
   const safeRole = ['super_admin', 'admin'].includes(role) ? 'member' : role;
 
   const user = await User.create({
@@ -276,7 +276,7 @@ const updateProfile = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findByIdAndUpdate(userId, update, {
-    new: true,
+    returnDocument: 'after',
     runValidators: true,
   });
 
@@ -325,7 +325,7 @@ const changePassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Current password is incorrect');
   }
 
-  user.password = await bcrypt.hash(newPassword, 12);
+  user.password = await bcrypt.hash(newPassword, 10);
   user.passwordChangedAt = new Date();
   await user.save();
 
@@ -582,7 +582,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid or expired reset token');
   }
 
-  user.password = await bcrypt.hash(password, 12);
+  user.password = await bcrypt.hash(password, 10);
   user.passwordChangedAt = new Date();
   await user.save();
 
