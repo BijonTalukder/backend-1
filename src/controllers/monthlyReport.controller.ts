@@ -12,6 +12,7 @@
 // and the per-recipient delivery log work unchanged for these reports.
 
 import { Request } from 'express';
+import { REPORTABLE_MATCH } from '../utils/ledger';
 import { Types } from 'mongoose';
 import User from '../models/user.model';
 import Business from '../models/business.model';
@@ -281,6 +282,7 @@ async function computeStatsFor(userIds: string[]): Promise<MonthlyStats> {
       $match: {
         business: { $in: businessIds.map((id) => new Types.ObjectId(id)) },
         date: { $gte: start, $lt: endExclusive },
+        ...REPORTABLE_MATCH,
       },
     },
     {

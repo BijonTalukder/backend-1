@@ -26,10 +26,13 @@ export const requireMembership = async (
   userId: Types.ObjectId,
   roles: string[] = ['owner', 'admin', 'member'],
 ) => {
+  // status:false is a removed member (business-member.controller soft-deletes):
+  // they must lose access to the business immediately, not keep it.
   const membership = await BusinessMembersModel.findOne({
     business: businessId,
     user: userId,
     role: { $in: roles },
+    status: true,
   });
   if (!membership) throw new ApiError(403, 'Access denied');
   return membership;

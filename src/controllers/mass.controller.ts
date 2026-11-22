@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { startOfMonth, endOfMonth } from 'date-fns';
+import { localYearMonth, localMonthRange } from '../utils/timezone';
+import { REPORTABLE_MATCH } from '../utils/ledger';
 import mongoose from 'mongoose';
 import { BusinessMembersModel } from '../models/business-members.model';
 import Transaction from '../models/transaction.model';
@@ -33,11 +34,12 @@ const getMessSummary = async (req: Request, res: Response) => {
         });
         if (!myMembership) return res.status(403).json({ message: 'Access denied' });
 
-        const y = year ? parseInt(year) : new Date().getFullYear();
-        const m = month ? parseInt(month) : new Date().getMonth(); // 0-based
+        const current = localYearMonth();
+        const y = year ? parseInt(year) : current.year;
+        const m = month ? parseInt(month) : current.month; // 0-based
 
-        const from = startOfMonth(new Date(y, m, 1));
-        const to = endOfMonth(new Date(y, m, 1));
+        // Dhaka month: an entry at 01:00 on the 1st belongs to this month.
+        const { start: from, endExclusive: to } = localMonthRange(y, m);
 
         // All active members
         const members = await BusinessMembersModel.find({
@@ -51,14 +53,16 @@ const getMessSummary = async (req: Request, res: Response) => {
         const expenses = await Transaction.find({
             business: businessId,
             type: 'expense',
-            date: { $gte: from, $lte: to },
+            date: { $gte: from, $lt: to },
+            ...REPORTABLE_MATCH,
         }).populate('member', 'firstName lastName').lean();
 
         // All INCOME transactions for the month (e.g. someone deposited to mess fund)
         const incomes = await Transaction.find({
             business: businessId,
             type: 'income',
-            date: { $gte: from, $lte: to },
+            date: { $gte: from, $lt: to },
+            ...REPORTABLE_MATCH,
         }).populate('member', 'firstName lastName').lean();
 
         // Total expenses for the month

@@ -1,5 +1,8 @@
 // controllers/purchase.controller.ts
 import { Request } from 'express';
+import { round2, toAmount, toQuantity } from '../utils/money';
+import { statusFor } from '../utils/allocate';
+import { weightedAverageCost } from '../utils/cost';
 import mongoose, { Types } from 'mongoose';
 import Purchase from '../models/purchase.model';
 import Product from '../models/product.model';
@@ -42,14 +45,22 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
   if (!Array.isArray(items) || items.length === 0) {
     throw new ApiError(400, 'At least one product is required');
   }
-  if (discount < 0 || paidAmount < 0) {
+  // Cast once: amounts may arrive as strings (see utils/money).
+  const parsedDiscount = toAmount(discount, 'Discount');
+  const parsedPaid = toAmount(paidAmount, 'Paid amount');
+  if (parsedDiscount < 0 || parsedPaid < 0) {
     throw new ApiError(400, 'Amounts cannot be negative');
   }
 
   let objectSupplierId: Types.ObjectId | null = null;
   if (supplierId) {
-    if (!Types.ObjectId.isValid(supplierId)) throw new ApiError(400, 'Invalid supplier id');
+    if (typeof supplierId !== 'string' || !Types.ObjectId.isValid(supplierId)) {
+      throw new ApiError(400, 'Invalid supplier id');
+    }
     objectSupplierId = new Types.ObjectId(supplierId);
+    // Another business's supplier id used to be accepted and its payable increased.
+    const owned = await Supplier.exists({ _id: objectSupplierId, business: objectBusinessId, status: true });
+    if (!owned) throw new ApiError(404, 'Supplier not found in this business');
   }
 
   const purchaseCategory = await TransactionCategory.findOne({
@@ -67,15 +78,13 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
     await session.withTransaction(async () => {
       const purchaseItems = [];
       let subtotal = 0;
+      const costLines: { productId: Types.ObjectId; stockBefore: number; costBefore: number; quantity: number; unitPrice: number }[] = [];
 
       for (const item of items) {
         if (!item.product || !Types.ObjectId.isValid(item.product)) {
           throw new ApiError(400, 'Invalid product in purchase items');
         }
-        const quantity = Number(item.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new ApiError(400, 'Item quantity must be greater than 0');
-        }
+        const quantity = toQuantity(item.quantity, 'Item quantity');
 
         const product = await Product.findOne({
           _id: item.product,
@@ -83,11 +92,17 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
         }).session(session);
         if (!product) throw new ApiError(404, 'Product not found');
 
-        const unitPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : product.purchasePrice;
-        if (unitPrice < 0) throw new ApiError(400, 'Unit price cannot be negative');
+        const unitPrice = toAmount(item.unitPrice, 'Unit price', { fallback: product.purchasePrice });
 
-        const lineTotal = quantity * unitPrice;
-        subtotal += lineTotal;
+        const lineTotal = round2(quantity * unitPrice);
+        subtotal = round2(subtotal + lineTotal);
+        costLines.push({
+          productId: product._id as Types.ObjectId,
+          stockBefore: product.stock,
+          costBefore: product.purchasePrice ?? 0,
+          quantity,
+          unitPrice,
+        });
 
         purchaseItems.push({
           product: product._id,
@@ -100,14 +115,29 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
         await adjustStock(product._id as any, quantity, session);
       }
 
-      const total = Math.max(0, subtotal - discount);
-      if (paidAmount > total) throw new ApiError(400, 'Paid amount cannot exceed total');
+      if (parsedDiscount > subtotal) throw new ApiError(400, 'Discount cannot be more than the subtotal');
+      const total = round2(subtotal - parsedDiscount);
+      if (parsedPaid > total) throw new ApiError(400, 'Paid amount cannot exceed total');
 
-      const dueAmount = total - paidAmount;
+      // Keep each product's cost price current (weighted average with the
+      // stock already on hand, discount spread over the lines). It was never
+      // updated on purchase and defaults to 0, so profit came out too high.
+      const discountFactor = subtotal > 0 ? total / subtotal : 1;
+      for (const line of costLines) {
+        const newCost = weightedAverageCost(
+          line.stockBefore,
+          line.costBefore,
+          line.quantity,
+          line.unitPrice * discountFactor,
+        );
+        await Product.updateOne({ _id: line.productId }, { $set: { purchasePrice: newCost } }, { session });
+      }
+
+      const dueAmount = round2(total - parsedPaid);
       if (dueAmount > 0 && !objectSupplierId) {
         throw new ApiError(400, 'Select a supplier to record a due purchase');
       }
-      const status = dueAmount === 0 ? 'paid' : paidAmount === 0 ? 'due' : 'partial';
+      const status = statusFor(parsedPaid, dueAmount);
 
       const referenceNumber = `PUR-${Date.now()}`;
 
@@ -119,9 +149,9 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
             supplier: objectSupplierId,
             items: purchaseItems,
             subtotal,
-            discount,
+            discount: parsedDiscount,
             total,
-            paidAmount,
+            paidAmount: parsedPaid,
             dueAmount,
             paymentMethod,
             status,
@@ -135,7 +165,7 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
       );
       purchase = created[0];
 
-      const { cashDelta, bankDelta } = balanceDeltaFor(paymentMethod, -paidAmount);
+      const { cashDelta, bankDelta } = balanceDeltaFor(paymentMethod, -parsedPaid);
       const transaction = await recordLedgerEntry(
         {
           business: objectBusinessId!,
@@ -161,9 +191,9 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
       await purchase.save({ session });
 
       if (objectSupplierId) {
-        await Supplier.findByIdAndUpdate(
-          objectSupplierId,
-          { $inc: { totalPurchases: total, totalPaid: paidAmount, totalPayable: dueAmount } },
+        await Supplier.findOneAndUpdate(
+          { _id: objectSupplierId, business: objectBusinessId },
+          { $inc: { totalPurchases: total, totalPaid: parsedPaid, totalPayable: dueAmount } },
           { session },
         );
       }

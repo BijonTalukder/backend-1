@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { Meal } from '../models/Meal.model';
 
-import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { localCalendarDay, localYearMonth, calendarMonthRange } from '../utils/timezone';
+import { Types } from 'mongoose';
 import { BusinessMembersModel } from '../models/business-members.model';
 
 /* ── helpers ───────────────────────────────────── */
@@ -11,14 +12,20 @@ const toMidnightUTC = (d: Date) => {
   return n;
 };
 
-const getUserRole = async (userId: string, businessId: string) => {
+/** The caller's role in the mess, or null. Ids must be plain ObjectId strings:
+ *  a JSON body could send businessId as {"$ne": null}, which matched any
+ *  business the caller belongs to and let them write into another mess. */
+const getUserRole = async (userId: unknown, businessId: unknown) => {
+  if (!isId(userId) || !isId(businessId)) return null;
   const bm = await BusinessMembersModel.findOne({
-    user: userId,
-    business: businessId,
+    user: new Types.ObjectId(userId),
+    business: new Types.ObjectId(businessId),
     status: true,
   });
   return bm?.role ?? null;
 };
+
+const isId = (v: unknown): v is string => typeof v === 'string' && Types.ObjectId.isValid(v);
 
 /* ── GET /api/meals?businessId=&year=&month= ────── */
 const getMeals = async (req: Request, res: Response) => {
@@ -32,15 +39,16 @@ const getMeals = async (req: Request, res: Response) => {
     const role = await getUserRole(userId, businessId);
     if (!role) return res.status(403).json({ message: 'Access denied' });
 
-    const y = year ? parseInt(year) : new Date().getFullYear();
-    const m = month ? parseInt(month) : new Date().getMonth(); // 0-based
+    const current = localYearMonth();
+    const y = year ? parseInt(year) : current.year;
+    const m = month ? parseInt(month) : current.month; // 0-based
 
-    const from = startOfMonth(new Date(y, m, 1));
-    const to = endOfMonth(new Date(y, m, 1));
+    // Meals are keyed by calendar day (UTC midnight), so the month is too.
+    const { start: from, endExclusive: to } = calendarMonthRange(y, m);
 
     const meals = await Meal.find({
       business: businessId,
-      date: { $gte: from, $lte: to },
+      date: { $gte: from, $lt: to },
     })
       .populate('member', 'firstName lastName email')
       .sort({ date: 1, createdAt: 1 });
@@ -81,7 +89,7 @@ const getMeals = async (req: Request, res: Response) => {
 
     return res.json({ data: { days: grouped, summary } });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -102,14 +110,18 @@ const addMeal = async (req: Request, res: Response) => {
     const isAdmin = ['owner', 'admin'].includes(role);
 
     const targetMemberId = isAdmin && memberId ? memberId : userId;
+    // An admin may log meals for others, but only for members of this mess.
+    if (targetMemberId !== userId && !(await getUserRole(targetMemberId, businessId))) {
+      return res.status(400).json({ message: 'That person is not a member of this mess' });
+    }
     const targetDate =
       isAdmin && date
         ? toMidnightUTC(new Date(date))
-        : toMidnightUTC(new Date());
+        : localCalendarDay();
 
     // Regular members can only add today
     if (!isAdmin) {
-      const today = toMidnightUTC(new Date());
+      const today = localCalendarDay(); // the mess's today (Dhaka), not the server's
       if (targetDate.getTime() !== today.getTime()) {
         return res
           .status(403)
@@ -153,8 +165,8 @@ const addMeal = async (req: Request, res: Response) => {
         .status(409)
         .json({ message: 'Meal already exists for this date' });
     }
-    console.log(err);
-    return res.status(500).json({ message: 'Server error', error: err });
+    console.error(err);
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -165,6 +177,7 @@ const updateMeal = async (req: Request, res: Response) => {
     const { count, note } = req.body;
     const userId = String((req as any).user._id);
 
+    if (!isId(id)) return res.status(404).json({ message: 'Meal not found' });
     const meal = await Meal.findById(id);
     if (!meal) return res.status(404).json({ message: 'Meal not found' });
 
@@ -178,7 +191,7 @@ const updateMeal = async (req: Request, res: Response) => {
     if (!isAdmin) {
       if (!isOwnerOfMeal)
         return res.status(403).json({ message: "Cannot edit others' meals" });
-      const today = toMidnightUTC(new Date());
+      const today = localCalendarDay(); // the mess's today (Dhaka), not the server's
       if (meal.date.getTime() !== today.getTime()) {
         return res.status(403).json({ message: "Can only edit today's meal" });
       }
@@ -192,7 +205,7 @@ const updateMeal = async (req: Request, res: Response) => {
     const populated = await meal.populate('member', 'firstName lastName email');
     return res.json({ data: populated, message: 'Meal updated' });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -202,6 +215,7 @@ const deleteMeal = async (req: Request, res: Response) => {
     const { id } = req.params;
     const userId = String((req as any).user._id);
 
+    if (!isId(id)) return res.status(404).json({ message: 'Meal not found' });
     const meal = await Meal.findById(id);
     if (!meal) return res.status(404).json({ message: 'Meal not found' });
 
@@ -213,7 +227,7 @@ const deleteMeal = async (req: Request, res: Response) => {
     await meal.deleteOne();
     return res.json({ message: 'Meal deleted' });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -227,18 +241,16 @@ const getMealSummary = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'businessId required' });
 
     const role = await getUserRole(userId, businessId);
-    console.log(role);
     if (!role) return res.status(403).json({ message: 'Access denied' });
 
-    const now = new Date();
-    const from = startOfMonth(now);
-    const to = endOfMonth(now);
+    const current = localYearMonth();
+    const { start: from, endExclusive: to } = calendarMonthRange(current.year, current.month);
 
     const result = await Meal.aggregate([
       {
         $match: {
-          business: new (require('mongoose').Types.ObjectId)(businessId),
-          date: { $gte: from, $lte: to },
+          business: new Types.ObjectId(businessId),
+          date: { $gte: from, $lt: to },
         },
       },
       {
@@ -254,10 +266,10 @@ const getMealSummary = async (req: Request, res: Response) => {
     const days = result[0]?.days?.length ?? 0;
 
     return res.json({
-      data: { total, days, month: now.getMonth(), year: now.getFullYear() },
+      data: { total, days, month: current.month, year: current.year },
     });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 export const mealController = {

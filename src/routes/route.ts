@@ -97,6 +97,7 @@ route.delete('/products/:id', auth, productController.deleteProduct);
 route.post('/sales', auth, saleController.createSale);
 route.get('/sales/business/:businessId', auth, saleController.getSales);
 route.get('/sales/:id', auth, saleController.getSale);
+route.post('/sales/:id/return', auth, saleController.returnSale);
 
 // ── Purchases (Business Mode) ─────────────────────────
 route.post('/purchases', auth, purchaseController.createPurchase);
@@ -106,6 +107,7 @@ route.get('/purchases/:id', auth, purchaseController.getPurchase);
 // ── Expenses (Business Mode) ──────────────────────────
 route.post('/expenses', auth, expenseController.createExpense);
 route.get('/expenses/business/:businessId', auth, expenseController.getExpenses);
+route.delete('/expenses/:id', auth, expenseController.deleteExpense);
 
 // ── Payments (Business Mode) ──────────────────────────
 route.post('/payments/receive', auth, paymentController.receivePayment);
@@ -248,7 +250,7 @@ route.get('/meals/summary', auth, mealController.getMealSummary);
 route.get('/meals/', auth, mealController.getMeals);
 route.post('/meals/', auth, mealController.addMeal);
 route.patch('/meals/:id', auth, mealController.updateMeal);
-route.delete('meals/:id', auth, mealController.deleteMeal);
+route.delete('/meals/:id', auth, mealController.deleteMeal);
 route.get('/mess/summary', auth, massController.getMessSummary);
 route.post(
   '/invoices/:businessId/generate', auth,

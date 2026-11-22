@@ -1,3 +1,4 @@
+import { Request } from 'express';
 import { Types } from 'mongoose';
 import Category from '../models/category.model';
 import Product from '../models/product.model';
@@ -8,7 +9,7 @@ import { getValidIds, requireMembership } from '../utils/businessAuth';
 
 const createCategory = asyncHandler(async (req, res, next) => {
   const { objectUserId } = getValidIds(req.user?._id);
-  const { name, businessId, ...rest } = req.body;
+  const { name, businessId } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     throw new ApiError(400, 'Category name is required');
@@ -40,7 +41,6 @@ const createCategory = asyncHandler(async (req, res, next) => {
   }
 
   const category = await Category.create({
-    ...rest,
     name: trimmedName,
     business: businessObjectId,
     status: true,
@@ -109,8 +109,12 @@ const getCategoriesByBusiness = asyncHandler(async (req, res, next) => {
   });
 });
 
+/** Global business-type categories (onboarding). Used to return every
+ *  business's product categories too, with their business and creator ids. */
+const GLOBAL_FIELDS = '_id name status';
+
 const getAllCategories = asyncHandler(async (req, res, next) => {
-  const categories = await Category.find({});
+  const categories = await Category.find({ business: null, status: true }).select(GLOBAL_FIELDS).sort({ name: 1 }).lean();
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -120,7 +124,7 @@ const getAllCategories = asyncHandler(async (req, res, next) => {
 });
 
 const getAllActiveCategories = asyncHandler(async (req, res, next) => {
-  const categories = await Category.find({ status: true });
+  const categories = await Category.find({ business: null, status: true }).select(GLOBAL_FIELDS).sort({ name: 1 }).lean();
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -133,11 +137,14 @@ const getMyCategories = asyncHandler(async (req, res, next) => {
   const userId = req.user?._id;
   const categories = await Category.find({
     status: true,
+    business: null,
     $or: [
       { createdBy: userId },
       { createdBy: null },
     ],
-  });
+  })
+    .select(GLOBAL_FIELDS)
+    .lean();
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -146,10 +153,39 @@ const getMyCategories = asyncHandler(async (req, res, next) => {
   });
 });
 
+/**
+ * Who may rename or delete a category: a business's category needs an owner
+ * or admin of that business; a global one only its creator or a platform
+ * admin. (Both routes used to accept any logged-in user, and PATCH wrote the
+ * raw body, so anyone could move or rename another business's category.)
+ */
+const loadManageableCategory = async (req: Request) => {
+  const id = req.params.id;
+  if (typeof id !== 'string' || !Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, 'Invalid category id');
+  }
+  const { objectUserId } = getValidIds(req.user?._id);
+  const category = await Category.findById(id);
+  if (!category || !category.status) throw new ApiError(404, 'Category not found');
+
+  if (category.business) {
+    await requireMembership(category.business as Types.ObjectId, objectUserId, ['owner', 'admin']);
+  } else {
+    const isCreator = category.createdBy?.toString() === objectUserId.toString();
+    const isPlatformAdmin = ['admin', 'super_admin'].includes(String(req.user?.role));
+    if (!isCreator && !isPlatformAdmin) throw new ApiError(403, 'Access denied');
+  }
+  return category;
+};
+
 const updateCategory = asyncHandler(async (req, res, next) => {
-  const category = await Category.findByIdAndUpdate(req.params.id, req.body, {
-    returnDocument: 'after',
-  });
+  const category = await loadManageableCategory(req);
+  const { name } = req.body;
+  if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
+    throw new ApiError(400, 'Category name is required (max 60 characters)');
+  }
+  category.name = name.trim();
+  await category.save();
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -159,7 +195,9 @@ const updateCategory = asyncHandler(async (req, res, next) => {
 });
 
 const deleteCategory = asyncHandler(async (req, res, next) => {
-  await Category.findByIdAndUpdate(req.params.id, { status: false });
+  const category = await loadManageableCategory(req);
+  category.status = false;
+  await category.save();
   sendResponse(res, {
     statusCode: 200,
     success: true,

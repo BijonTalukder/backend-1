@@ -137,6 +137,7 @@ const removeMember = asyncHandler(async (req: Request, res, next) => {
   const target = await BusinessMembersModel.findOne({
     business: objectBusinessId,
     user: objectMemberId,
+    status: true,
   });
   if (!target) throw new ApiError(404, 'Member not found');
   if (target.role === 'owner')
@@ -189,6 +190,7 @@ const updateMemberRole = asyncHandler(async (req: Request, res, next) => {
   const target = await BusinessMembersModel.findOne({
     business: objectBusinessId,
     user: objectMemberId,
+    status: true,
   });
   if (!target) throw new ApiError(404, 'Member not found');
   if (target.role === 'owner')
