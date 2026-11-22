@@ -50,6 +50,11 @@ export interface ITransaction extends Document {
 
   // ─── Business Mode ──────────────────────────────
   paymentMethod?: 'cash' | 'bank' | 'bkash' | 'nagad' | 'other';
+  /** What this entry did to Business.cashBalance / bankBalance, so it can be reversed exactly. */
+  cashDelta: number;
+  bankDelta: number;
+  /** True when cashDelta/bankDelta were applied to the business (entries made before deltas were stored: false). */
+  balanceApplied: boolean;
   customer?: mongoose.Types.ObjectId | null;
   supplier?: mongoose.Types.ObjectId | null;
   source?: {
@@ -175,6 +180,9 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
       type: String,
       enum: ['cash', 'bank', 'bkash', 'nagad', 'other'],
     },
+    cashDelta: { type: Number, default: 0 },
+    bankDelta: { type: Number, default: 0 },
+    balanceApplied: { type: Boolean, default: false },
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',

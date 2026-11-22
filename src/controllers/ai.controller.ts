@@ -8,6 +8,8 @@
 // 4. Metadata-driven command registry discovery for the UI
 
 import { Request } from 'express';
+import { resolveDateRange } from '../utils/timezone';
+import { REPORTABLE_MATCH } from '../utils/ledger';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
@@ -172,21 +174,22 @@ const buildBusinessContext = async (businessId: string, userId: string) => {
   const categoryNames = categories.map((c) => c.name).join(', ') || 'None';
   const catNameMap = new Map(categories.map((c) => [String(c._id), c.name]));
 
-  const now = new Date();
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  // Dhaka months; payments and the opening balance aren't income/expense (utils/ledger REPORTABLE_MATCH).
+  const { start: currentMonthStart, endExclusive: currentMonthEnd } = resolveDateRange({ preset: 'thismonth' });
+  const { start: lastMonthStart } = resolveDateRange({ preset: 'lastmonth' });
 
   const [thisMonthTx, lastMonthTx, recentTx] = (await Promise.all([
     Transaction.find({
       business: bizId,
       date: { $gte: currentMonthStart, $lt: currentMonthEnd },
+      ...REPORTABLE_MATCH,
     })
       .select('type amount date note category')
       .lean(),
     Transaction.find({
       business: bizId,
       date: { $gte: lastMonthStart, $lt: currentMonthStart },
+      ...REPORTABLE_MATCH,
     })
       .select('type amount date note category')
       .lean(),

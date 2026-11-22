@@ -6,6 +6,7 @@
 import { ClientSession, Types } from 'mongoose';
 import Transaction, { TransactionType } from '../models/transaction.model';
 import Business from '../models/business.model';
+import { round2 } from './money';
 
 export interface RecordEntryInput {
   business: Types.ObjectId;
@@ -46,6 +47,9 @@ export const recordLedgerEntry = async (input: RecordEntryInput, session: Client
         supplier: input.supplier ?? null,
         source: input.source ?? null,
         date: input.date ?? new Date(),
+        cashDelta: input.cashDelta ?? 0,
+        bankDelta: input.bankDelta ?? 0,
+        balanceApplied: true,
         splitType: 'none',
         settlementStatus: 'not_applicable',
       },
@@ -53,18 +57,43 @@ export const recordLedgerEntry = async (input: RecordEntryInput, session: Client
     { session },
   );
 
-  const cashDelta = input.cashDelta ?? 0;
-  const bankDelta = input.bankDelta ?? 0;
-  if (cashDelta !== 0 || bankDelta !== 0) {
-    await Business.findByIdAndUpdate(
-      input.business,
-      { $inc: { cashBalance: cashDelta, bankBalance: bankDelta } },
-      { session },
-    );
-  }
+  await applyBalanceDelta(input.business, input.cashDelta ?? 0, input.bankDelta ?? 0, session);
 
   return transaction;
 };
+
+/** Move Business.cashBalance / bankBalance (no-op for zero deltas). */
+export const applyBalanceDelta = async (
+  business: Types.ObjectId,
+  cashDelta: number,
+  bankDelta: number,
+  session: ClientSession,
+) => {
+  if (cashDelta === 0 && bankDelta === 0) return;
+  await Business.findByIdAndUpdate(
+    business,
+    { $inc: { cashBalance: round2(cashDelta), bankBalance: round2(bankDelta) } },
+    { session },
+  );
+};
+
+/**
+ * Which transactions count as income / expense in summaries.
+ *
+ * - A customer or supplier payment settles a sale or purchase that was
+ *   already counted in full when it was made; counting the payment again
+ *   doubled income (a ৳1000 credit sale + its ৳1000 receipt showed ৳2000).
+ * - The opening balance (isAdjustment) is money the business already had,
+ *   not income.
+ */
+export const REPORTABLE_MATCH = {
+  isAdjustment: { $ne: true },
+  'source.type': { $ne: 'payment' },
+} as const;
+
+/** The same rule for transactions already loaded into memory. */
+export const isReportable = (t: { isAdjustment?: boolean; source?: { type?: string } | null }) =>
+  !t.isAdjustment && t.source?.type !== 'payment';
 
 // A payment method resolves to either the cash or bank bucket — bkash/nagad/other
 // are treated as "bank-equivalent" (electronic, not physical till) since the

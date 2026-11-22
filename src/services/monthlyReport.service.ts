@@ -12,6 +12,7 @@
 // are start-inclusive / end-exclusive and cannot drift by a day.
 
 import { Types } from 'mongoose';
+import { REPORTABLE_MATCH } from '../utils/ledger';
 import User from '../models/user.model';
 import Business from '../models/business.model';
 import { BusinessMembersModel } from '../models/business-members.model';
@@ -191,6 +192,7 @@ export async function aggregateMonthlyTotals(
         business: { $in: businessIds },
         // Start-inclusive, end-exclusive — see resolveDateRange().
         date: { $gte: start, $lt: endExclusive },
+        ...REPORTABLE_MATCH,
       },
     },
     {
@@ -212,6 +214,7 @@ export async function aggregateMonthlyTotals(
       $match: {
         business: { $in: businessIds },
         date: { $gte: start, $lt: endExclusive },
+        ...REPORTABLE_MATCH,
         type: { $in: ['income', 'expense'] },
       },
     },

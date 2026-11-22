@@ -124,8 +124,8 @@ export const resolveDateRange = (
     default: {
       // Custom date range
       if (input?.from || input?.to) {
-        const fromStr = input.from ?? new Date(0).toISOString().slice(0, 10);
-        const toStr = input.to ?? localNow.toISOString().slice(0, 10);
+        const fromStr = toLocalDayString(input.from) ?? new Date(0).toISOString().slice(0, 10);
+        const toStr = toLocalDayString(input.to) ?? localNow.toISOString().slice(0, 10);
 
         const fromParts = fromStr.split('-').map(Number);
         const toParts = toStr.split('-').map(Number);
@@ -176,3 +176,56 @@ export const toLocalIsoDay = (date: Date, offsetMinutes: number = DHAKA_OFFSET_M
   const d = new Date(localMs);
   return d.toISOString().slice(0, 10);
 };
+
+/**
+ * "YYYY-MM-DD" for a request date. A plain day passes through; a full ISO
+ * timestamp (what the app's date pickers often send) becomes the Dhaka
+ * calendar day it falls on. Splitting a timestamp on "-" used to yield NaN.
+ */
+export const toLocalDayString = (value?: string, offsetMinutes: number = DHAKA_OFFSET_MINUTES): string | undefined => {
+  if (!value) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : toLocalIsoDay(d, offsetMinutes);
+};
+
+/** Dhaka calendar-year bounds: [1 Jan 00:00, next 1 Jan 00:00). */
+export const localYearRange = (year: number, offsetMinutes: number = DHAKA_OFFSET_MINUTES) => ({
+  start: makeUtcFromLocal(year, 0, 1, 0, 0, 0, offsetMinutes),
+  endExclusive: makeUtcFromLocal(year + 1, 0, 1, 0, 0, 0, offsetMinutes),
+});
+
+/**
+ * The Dhaka calendar day of `date` as UTC midnight of that day. Meals are
+ * stored keyed this way, so "today" must be the shop's today: at 01:00 in
+ * Dhaka the UTC date is still yesterday.
+ */
+export const localCalendarDay = (date: Date = new Date(), offsetMinutes: number = DHAKA_OFFSET_MINUTES): Date => {
+  const local = new Date(date.getTime() + offsetMinutes * 60000);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
+};
+
+/** The Dhaka calendar year right now. */
+export const localYear = (offsetMinutes: number = DHAKA_OFFSET_MINUTES): number =>
+  getLocalNow(offsetMinutes).getUTCFullYear();
+
+/** "+06:00" for MongoDB $dateToString / $month so grouping uses Dhaka days. */
+export const MONGO_TZ = '+06:00';
+
+/** The Dhaka calendar month right now: { year, month } with month 0-11. */
+export const localYearMonth = (offsetMinutes: number = DHAKA_OFFSET_MINUTES) => {
+  const now = getLocalNow(offsetMinutes);
+  return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
+};
+
+/** Dhaka month bounds for real timestamps: [1st 00:00, next 1st 00:00). month is 0-11. */
+export const localMonthRange = (year: number, month: number, offsetMinutes: number = DHAKA_OFFSET_MINUTES) => ({
+  start: makeUtcFromLocal(year, month, 1, 0, 0, 0, offsetMinutes),
+  endExclusive: makeUtcFromLocal(year, month + 1, 1, 0, 0, 0, offsetMinutes),
+});
+
+/** Month bounds for calendar-day keys stored as UTC midnight (meals). month is 0-11. */
+export const calendarMonthRange = (year: number, month: number) => ({
+  start: new Date(Date.UTC(year, month, 1)),
+  endExclusive: new Date(Date.UTC(year, month + 1, 1)),
+});

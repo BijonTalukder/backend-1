@@ -1,5 +1,6 @@
 // controllers/invoice.controller.ts
 import { Request } from 'express';
+import { isReportable } from '../utils/ledger';
 import { Types } from 'mongoose';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
@@ -83,10 +84,10 @@ const generateInvoice = asyncHandler(async (req: Request, res) => {
   }));
 
   const totalIncome = transactions
-    .filter((t) => t.type === 'income')
+    .filter((t) => t.type === 'income' && isReportable(t as any))
     .reduce((s, t) => s + t.amount, 0);
   const totalExpense = transactions
-    .filter((t) => t.type === 'expense')
+    .filter((t) => t.type === 'expense' && isReportable(t as any))
     .reduce((s, t) => s + t.amount, 0);
   const netBalance = totalIncome - totalExpense;
 

@@ -1,5 +1,9 @@
 // controllers/payment.controller.ts
 import { Request } from 'express';
+import Sale from '../models/sale.model';
+import Purchase from '../models/purchase.model';
+import { allocateToOpenInvoices } from '../utils/allocate';
+import { toAmount } from '../utils/money';
 import mongoose, { Types } from 'mongoose';
 import Payment from '../models/payment.model';
 import Customer from '../models/customer.model';
@@ -65,10 +69,7 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
   if (!customerId || !Types.ObjectId.isValid(customerId)) {
     throw new ApiError(400, 'A valid customer is required');
   }
-  const parsedAmount = Number(amount);
-  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-    throw new ApiError(400, 'A valid amount is required');
-  }
+  const parsedAmount = toAmount(amount, 'Amount', { positive: true });
 
   const session = await mongoose.startSession();
   let payment;
@@ -134,6 +135,16 @@ const receivePayment = asyncHandler(async (req: Request, res) => {
         { session },
       );
 
+      // Settle the customer's open sales oldest first, so a paid-off invoice
+      // shows "paid" (it used to stay "due" forever). Any remainder settles
+      // the opening balance, which has no invoice.
+      await allocateToOpenInvoices(
+        Sale,
+        { business: objectBusinessId, customer: customer._id },
+        parsedAmount,
+        session,
+      );
+
       await claimOperation(
         {
           business: objectBusinessId!,
@@ -187,10 +198,7 @@ const makePayment = asyncHandler(async (req: Request, res) => {
   if (!supplierId || !Types.ObjectId.isValid(supplierId)) {
     throw new ApiError(400, 'A valid supplier is required');
   }
-  const parsedAmount = Number(amount);
-  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-    throw new ApiError(400, 'A valid amount is required');
-  }
+  const parsedAmount = toAmount(amount, 'Amount', { positive: true });
 
   const session = await mongoose.startSession();
   let payment;
@@ -254,6 +262,14 @@ const makePayment = asyncHandler(async (req: Request, res) => {
         supplier._id,
         { $inc: { totalPaid: parsedAmount, totalPayable: -parsedAmount } },
         { session },
+      );
+
+      // Same for the supplier's open purchases, oldest first.
+      await allocateToOpenInvoices(
+        Purchase,
+        { business: objectBusinessId, supplier: supplier._id },
+        parsedAmount,
+        session,
       );
 
       await claimOperation(

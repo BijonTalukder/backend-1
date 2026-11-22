@@ -5,6 +5,7 @@
 // Uses canonical models: Sale, Purchase, Expense, Transaction, Customer, Supplier, Product, Business.
 
 import { Types } from 'mongoose';
+import { REPORTABLE_MATCH } from '../utils/ledger';
 import Business from '../models/business.model';
 import Sale from '../models/sale.model';
 import Purchase from '../models/purchase.model';
@@ -126,6 +127,7 @@ const executeOverview = async (
           business: ctx.businessId,
           type: 'expense',
           $or: [{ source: { $exists: false } }, { source: null }],
+          isAdjustment: { $ne: true },
           date: { $gte: range.start, $lt: range.endExclusive },
         },
       },
@@ -293,6 +295,7 @@ const executeExpense = async (
       business: ctx.businessId,
       type: 'expense',
       $or: [{ source: { $exists: false } }, { source: null }],
+          isAdjustment: { $ne: true },
       date: { $gte: range.start, $lt: range.endExclusive },
     })
       .populate('category', 'name')
@@ -415,6 +418,7 @@ const executeProfit = async (
             business: ctx.businessId,
             type: 'expense',
             $or: [{ source: { $exists: false } }, { source: null }],
+          isAdjustment: { $ne: true },
             date: { $gte: from, $lt: to },
           },
         },
@@ -489,6 +493,7 @@ const executeIncome = async (
     business: ctx.businessId,
     type: 'income',
     date: { $gte: range.start, $lt: range.endExclusive },
+    ...REPORTABLE_MATCH,
   })
     .populate('category', 'name')
     .sort({ date: -1 })

@@ -7,7 +7,9 @@ import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
 import { getValidIds, requireMembership } from '../utils/businessAuth';
-import { recordLedgerEntry, balanceDeltaFor, sanitizeAttachmentUrl } from '../utils/ledger';
+import { recordLedgerEntry, balanceDeltaFor, sanitizeAttachmentUrl, applyBalanceDelta } from '../utils/ledger';
+import Transaction from '../models/transaction.model';
+import { toAmount } from '../utils/money';
 
 const createExpense = asyncHandler(async (req: Request, res) => {
   const { objectUserId } = getValidIds(req.user?._id);
@@ -17,10 +19,7 @@ const createExpense = asyncHandler(async (req: Request, res) => {
 
   await requireMembership(objectBusinessId!, objectUserId);
 
-  const parsedAmount = Number(amount);
-  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-    throw new ApiError(400, 'A valid amount is required');
-  }
+  const parsedAmount = toAmount(amount, 'Amount', { positive: true });
   if (!categoryId || !Types.ObjectId.isValid(categoryId)) {
     throw new ApiError(400, 'A valid category is required');
   }
@@ -126,7 +125,49 @@ const getExpenses = asyncHandler(async (req: Request, res) => {
   });
 });
 
+/* ─── Delete an expense ──────────────────────────────────
+   The expense, its ledger entry and the money it took out of cash/bank go
+   together. (Deleting only the ledger row from the transactions list used to
+   leave the expense in reports and the cash balance short.) */
+const deleteExpense = asyncHandler(async (req: Request, res) => {
+  const { objectUserId } = getValidIds(req.user?._id);
+  const { id } = req.params;
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) throw new ApiError(400, 'Invalid expense id');
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const expense = await Expense.findById(id).session(session);
+      if (!expense) throw new ApiError(404, 'Expense not found');
+      const isCreator = String(expense.createdBy) === String(objectUserId);
+      await requireMembership(
+        expense.business as Types.ObjectId,
+        objectUserId,
+        isCreator ? ['owner', 'admin', 'member'] : ['owner', 'admin'],
+      );
+
+      const tx = expense.linkedTransaction
+        ? await Transaction.findById(expense.linkedTransaction).session(session)
+        : null;
+      // Entries made before deltas were stored still moved the balance (every
+      // expense went through recordLedgerEntry), so rebuild that move from the expense.
+      const delta =
+        tx && tx.balanceApplied
+          ? { cashDelta: tx.cashDelta ?? 0, bankDelta: tx.bankDelta ?? 0 }
+          : balanceDeltaFor(expense.paymentMethod, -expense.amount);
+      await applyBalanceDelta(expense.business as Types.ObjectId, -delta.cashDelta, -delta.bankDelta, session);
+      if (tx) await Transaction.deleteOne({ _id: tx._id }, { session });
+      await Expense.deleteOne({ _id: expense._id }, { session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  sendResponse(res, { statusCode: 200, success: true, message: 'Expense deleted' });
+});
+
 export const expenseController = {
+  deleteExpense,
   createExpense,
   getExpenses,
 };

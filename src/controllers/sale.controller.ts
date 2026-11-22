@@ -1,5 +1,8 @@
 // controllers/sale.controller.ts
 import { Request } from 'express';
+import { planSaleReturn } from '../utils/saleReturn';
+import { round2, toAmount, toQuantity } from '../utils/money';
+import { statusFor } from '../utils/allocate';
 import mongoose, { Types } from 'mongoose';
 import Sale from '../models/sale.model';
 import Product from '../models/product.model';
@@ -77,9 +80,11 @@ const createSale = asyncHandler(async (req: Request, res) => {
   if (!Array.isArray(items) || items.length === 0) {
     throw new ApiError(400, 'At least one product is required');
   }
-  if (discount < 0 || tax < 0 || paidAmount < 0) {
-    throw new ApiError(400, 'Amounts cannot be negative');
-  }
+  // Cast once, here: "5" + 0 is "50" in JS, so a string tax used to be
+  // concatenated onto the total (100 - 10 + "5" = "905").
+  const parsedDiscount = toAmount(discount, 'Discount');
+  const parsedTax = toAmount(tax, 'Tax');
+  const parsedPaid = toAmount(paidAmount, 'Paid amount');
 
   let objectCustomerId: Types.ObjectId | null = null;
   if (customerId) {
@@ -112,10 +117,7 @@ const createSale = asyncHandler(async (req: Request, res) => {
         if (!item.product || !Types.ObjectId.isValid(item.product)) {
           throw new ApiError(400, 'Invalid product in sale items');
         }
-        const quantity = Number(item.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new ApiError(400, 'Item quantity must be greater than 0');
-        }
+        const quantity = toQuantity(item.quantity, 'Item quantity');
 
         const product = await Product.findOne({
           _id: item.product,
@@ -123,11 +125,10 @@ const createSale = asyncHandler(async (req: Request, res) => {
         }).session(session);
         if (!product) throw new ApiError(404, 'Product not found');
 
-        const unitPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : product.sellingPrice;
-        if (unitPrice < 0) throw new ApiError(400, 'Unit price cannot be negative');
+        const unitPrice = toAmount(item.unitPrice, 'Unit price', { fallback: product.sellingPrice });
 
-        const lineTotal = quantity * unitPrice;
-        subtotal += lineTotal;
+        const lineTotal = round2(quantity * unitPrice);
+        subtotal = round2(subtotal + lineTotal);
 
         saleItems.push({
           product: product._id,
@@ -135,19 +136,23 @@ const createSale = asyncHandler(async (req: Request, res) => {
           quantity,
           unitPrice,
           lineTotal,
+          // Cost at the moment of sale, so editing the cost price later can't rewrite past profit.
+          unitCost: round2(product.purchasePrice ?? 0),
+          returnedQuantity: 0,
         });
 
         await adjustStock(product._id as any, -quantity, session);
       }
 
-      const total = Math.max(0, subtotal - discount + tax);
-      if (paidAmount > total) throw new ApiError(400, 'Paid amount cannot exceed total');
+      if (parsedDiscount > subtotal) throw new ApiError(400, 'Discount cannot be more than the subtotal');
+      const total = round2(subtotal - parsedDiscount + parsedTax);
+      if (parsedPaid > total) throw new ApiError(400, 'Paid amount cannot exceed total');
 
-      const dueAmount = total - paidAmount;
+      const dueAmount = round2(total - parsedPaid);
       if (dueAmount > 0 && !objectCustomerId) {
         throw new ApiError(400, 'Select a customer to record a due sale');
       }
-      const status = dueAmount === 0 ? 'paid' : paidAmount === 0 ? 'due' : 'partial';
+      const status = statusFor(parsedPaid, dueAmount);
 
       const business = await Business.findById(objectBusinessId).session(session);
       if (!business) throw new ApiError(404, 'Business not found');
@@ -164,10 +169,10 @@ const createSale = asyncHandler(async (req: Request, res) => {
             customer: objectCustomerId,
             items: saleItems,
             subtotal,
-            discount,
-            tax,
+            discount: parsedDiscount,
+            tax: parsedTax,
             total,
-            paidAmount,
+            paidAmount: parsedPaid,
             dueAmount,
             paymentMethod,
             status,
@@ -181,7 +186,7 @@ const createSale = asyncHandler(async (req: Request, res) => {
       );
       sale = created[0];
 
-      const { cashDelta, bankDelta } = balanceDeltaFor(paymentMethod, paidAmount);
+      const { cashDelta, bankDelta } = balanceDeltaFor(paymentMethod, parsedPaid);
       const transaction = await recordLedgerEntry(
         {
           business: objectBusinessId!,
@@ -209,7 +214,7 @@ const createSale = asyncHandler(async (req: Request, res) => {
       if (objectCustomerId) {
         await Customer.findOneAndUpdate(
           { _id: objectCustomerId, business: objectBusinessId },
-          { $inc: { totalSales: total, totalPaid: paidAmount, totalDue: dueAmount } },
+          { $inc: { totalSales: total, totalPaid: parsedPaid, totalDue: dueAmount } },
           { session },
         );
       }
@@ -301,8 +306,120 @@ const getSale = asyncHandler(async (req: Request, res) => {
   });
 });
 
+/* ─── Return / cancel ─────────────────────────────────────
+   POST /sales/:id/return  { items?: [{ product, quantity }], refundMethod?, note? }
+   No `items` = cancel: everything not yet returned comes back.
+   Stock goes back up, the customer's due drops first and only the rest is
+   refunded, and a "Sales Return" expense entry takes the refund out of the
+   cash/bank balance. Owner/admin only: it hands money back. */
+const RETURN_METHODS = ['cash', 'bank', 'bkash', 'nagad', 'other'];
+
+const returnSale = asyncHandler(async (req: Request, res) => {
+  const { objectUserId } = getValidIds(req.user?._id);
+  const { id } = req.params;
+  if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id)) throw new ApiError(400, 'Invalid sale id');
+  const { items, refundMethod: rawMethod, note } = req.body ?? {};
+
+  const session = await mongoose.startSession();
+  let saleId: Types.ObjectId | undefined;
+  try {
+    await session.withTransaction(async () => {
+      const sale = await Sale.findById(id).session(session);
+      if (!sale) throw new ApiError(404, 'Sale not found');
+      saleId = sale._id as Types.ObjectId;
+      const business = sale.business as Types.ObjectId;
+      await requireMembership(business, objectUserId, ['owner', 'admin']);
+      if (sale.status === 'cancelled') throw new ApiError(400, 'This sale is already cancelled');
+
+      const plan = planSaleReturn(sale, items === undefined ? null : items);
+      const refundMethod = RETURN_METHODS.includes(rawMethod) ? rawMethod : sale.paymentMethod || 'cash';
+
+      for (const line of plan.lines) {
+        await adjustStock(new Types.ObjectId(line.product), line.quantity, session);
+        const item = sale.items[line.index];
+        item.returnedQuantity = round2((item.returnedQuantity ?? 0) + line.quantity);
+      }
+
+      sale.returnedTotal = round2((sale.returnedTotal ?? 0) + plan.amount);
+      sale.dueAmount = round2(sale.dueAmount - plan.dueReduced);
+      sale.paidAmount = round2(sale.paidAmount - plan.refunded);
+      sale.status = plan.fullyReturned ? 'cancelled' : statusFor(sale.paidAmount, sale.dueAmount);
+
+      if (sale.customer) {
+        await Customer.updateOne(
+          { _id: sale.customer, business },
+          { $inc: { totalSales: -plan.amount, totalDue: -plan.dueReduced, totalPaid: -plan.refunded } },
+          { session },
+        );
+      }
+
+      let category = await TransactionCategory.findOne({ business, name: 'Sales Return' }).session(session);
+      if (!category) {
+        [category] = await TransactionCategory.create(
+          [{ business, name: 'Sales Return', type: 'expense', group: 'business', icon: '↩️' }],
+          { session },
+        );
+      }
+
+      const label = plan.fullyReturned ? `Cancelled ${sale.invoiceNumber}` : `Return on ${sale.invoiceNumber}`;
+      const { cashDelta, bankDelta } = balanceDeltaFor(refundMethod, -plan.refunded);
+      const transaction = await recordLedgerEntry(
+        {
+          business,
+          type: 'expense',
+          amount: plan.amount,
+          category: category!._id as Types.ObjectId,
+          note: typeof note === 'string' && note.trim() ? note.trim() : label,
+          reference: sale.invoiceNumber,
+          createdBy: objectUserId,
+          member: objectUserId,
+          paymentMethod: refundMethod,
+          customer: (sale.customer as Types.ObjectId) ?? null,
+          source: { type: 'sale', id: sale._id as Types.ObjectId },
+          cashDelta,
+          bankDelta,
+        },
+        session,
+      );
+
+      sale.returns.push({
+        date: new Date(),
+        items: plan.lines.map((l) => ({
+          product: new Types.ObjectId(l.product),
+          productName: l.productName,
+          quantity: l.quantity,
+          amount: l.amount,
+        })),
+        amount: plan.amount,
+        dueReduced: plan.dueReduced,
+        refunded: plan.refunded,
+        refundMethod,
+        note: typeof note === 'string' ? note.trim() || undefined : undefined,
+        createdBy: objectUserId,
+        linkedTransaction: transaction._id as Types.ObjectId,
+      });
+      await sale.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  const updated = await Sale.findById(saleId)
+    .populate('customer', 'name phone email address')
+    .populate('items.product', 'name unit sku')
+    .lean();
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: updated?.status === 'cancelled' ? 'Sale cancelled' : 'Return recorded',
+    data: updated,
+  });
+});
+
 export const saleController = {
   createSale,
   getSales,
   getSale,
+  returnSale,
 };
