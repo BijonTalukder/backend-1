@@ -248,7 +248,7 @@ route.get('/meals/summary', auth, mealController.getMealSummary);
 route.get('/meals/', auth, mealController.getMeals);
 route.post('/meals/', auth, mealController.addMeal);
 route.patch('/meals/:id', auth, mealController.updateMeal);
-route.delete('meals/:id', auth, mealController.deleteMeal);
+route.delete('/meals/:id', auth, mealController.deleteMeal);
 route.get('/mess/summary', auth, massController.getMessSummary);
 route.post(
   '/invoices/:businessId/generate', auth,

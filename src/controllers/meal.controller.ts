@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Meal } from '../models/Meal.model';
 
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { Types } from 'mongoose';
 import { BusinessMembersModel } from '../models/business-members.model';
 
 /* ── helpers ───────────────────────────────────── */
@@ -11,14 +12,20 @@ const toMidnightUTC = (d: Date) => {
   return n;
 };
 
-const getUserRole = async (userId: string, businessId: string) => {
+/** The caller's role in the mess, or null. Ids must be plain ObjectId strings:
+ *  a JSON body could send businessId as {"$ne": null}, which matched any
+ *  business the caller belongs to and let them write into another mess. */
+const getUserRole = async (userId: unknown, businessId: unknown) => {
+  if (!isId(userId) || !isId(businessId)) return null;
   const bm = await BusinessMembersModel.findOne({
-    user: userId,
-    business: businessId,
+    user: new Types.ObjectId(userId),
+    business: new Types.ObjectId(businessId),
     status: true,
   });
   return bm?.role ?? null;
 };
+
+const isId = (v: unknown): v is string => typeof v === 'string' && Types.ObjectId.isValid(v);
 
 /* ── GET /api/meals?businessId=&year=&month= ────── */
 const getMeals = async (req: Request, res: Response) => {
@@ -81,7 +88,7 @@ const getMeals = async (req: Request, res: Response) => {
 
     return res.json({ data: { days: grouped, summary } });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -102,6 +109,10 @@ const addMeal = async (req: Request, res: Response) => {
     const isAdmin = ['owner', 'admin'].includes(role);
 
     const targetMemberId = isAdmin && memberId ? memberId : userId;
+    // An admin may log meals for others, but only for members of this mess.
+    if (targetMemberId !== userId && !(await getUserRole(targetMemberId, businessId))) {
+      return res.status(400).json({ message: 'That person is not a member of this mess' });
+    }
     const targetDate =
       isAdmin && date
         ? toMidnightUTC(new Date(date))
@@ -153,8 +164,8 @@ const addMeal = async (req: Request, res: Response) => {
         .status(409)
         .json({ message: 'Meal already exists for this date' });
     }
-    console.log(err);
-    return res.status(500).json({ message: 'Server error', error: err });
+    console.error(err);
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -165,6 +176,7 @@ const updateMeal = async (req: Request, res: Response) => {
     const { count, note } = req.body;
     const userId = String((req as any).user._id);
 
+    if (!isId(id)) return res.status(404).json({ message: 'Meal not found' });
     const meal = await Meal.findById(id);
     if (!meal) return res.status(404).json({ message: 'Meal not found' });
 
@@ -192,7 +204,7 @@ const updateMeal = async (req: Request, res: Response) => {
     const populated = await meal.populate('member', 'firstName lastName email');
     return res.json({ data: populated, message: 'Meal updated' });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -202,6 +214,7 @@ const deleteMeal = async (req: Request, res: Response) => {
     const { id } = req.params;
     const userId = String((req as any).user._id);
 
+    if (!isId(id)) return res.status(404).json({ message: 'Meal not found' });
     const meal = await Meal.findById(id);
     if (!meal) return res.status(404).json({ message: 'Meal not found' });
 
@@ -213,7 +226,7 @@ const deleteMeal = async (req: Request, res: Response) => {
     await meal.deleteOne();
     return res.json({ message: 'Meal deleted' });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -237,7 +250,7 @@ const getMealSummary = async (req: Request, res: Response) => {
     const result = await Meal.aggregate([
       {
         $match: {
-          business: new (require('mongoose').Types.ObjectId)(businessId),
+          business: new Types.ObjectId(businessId),
           date: { $gte: from, $lte: to },
         },
       },
@@ -257,7 +270,7 @@ const getMealSummary = async (req: Request, res: Response) => {
       data: { total, days, month: now.getMonth(), year: now.getFullYear() },
     });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 export const mealController = {

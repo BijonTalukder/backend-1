@@ -83,8 +83,13 @@ const createSale = asyncHandler(async (req: Request, res) => {
 
   let objectCustomerId: Types.ObjectId | null = null;
   if (customerId) {
-    if (!Types.ObjectId.isValid(customerId)) throw new ApiError(400, 'Invalid customer id');
+    if (typeof customerId !== 'string' || !Types.ObjectId.isValid(customerId)) {
+      throw new ApiError(400, 'Invalid customer id');
+    }
     objectCustomerId = new Types.ObjectId(customerId);
+    // Another business's customer id used to be accepted and its due increased.
+    const owned = await Customer.exists({ _id: objectCustomerId, business: objectBusinessId, status: true });
+    if (!owned) throw new ApiError(404, 'Customer not found in this business');
   }
 
   const salesCategory = await TransactionCategory.findOne({
@@ -202,8 +207,8 @@ const createSale = asyncHandler(async (req: Request, res) => {
       await sale.save({ session });
 
       if (objectCustomerId) {
-        await Customer.findByIdAndUpdate(
-          objectCustomerId,
+        await Customer.findOneAndUpdate(
+          { _id: objectCustomerId, business: objectBusinessId },
           { $inc: { totalSales: total, totalPaid: paidAmount, totalDue: dueAmount } },
           { session },
         );

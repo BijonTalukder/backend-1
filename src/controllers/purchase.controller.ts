@@ -48,8 +48,13 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
 
   let objectSupplierId: Types.ObjectId | null = null;
   if (supplierId) {
-    if (!Types.ObjectId.isValid(supplierId)) throw new ApiError(400, 'Invalid supplier id');
+    if (typeof supplierId !== 'string' || !Types.ObjectId.isValid(supplierId)) {
+      throw new ApiError(400, 'Invalid supplier id');
+    }
     objectSupplierId = new Types.ObjectId(supplierId);
+    // Another business's supplier id used to be accepted and its payable increased.
+    const owned = await Supplier.exists({ _id: objectSupplierId, business: objectBusinessId, status: true });
+    if (!owned) throw new ApiError(404, 'Supplier not found in this business');
   }
 
   const purchaseCategory = await TransactionCategory.findOne({
@@ -161,8 +166,8 @@ const createPurchase = asyncHandler(async (req: Request, res) => {
       await purchase.save({ session });
 
       if (objectSupplierId) {
-        await Supplier.findByIdAndUpdate(
-          objectSupplierId,
+        await Supplier.findOneAndUpdate(
+          { _id: objectSupplierId, business: objectBusinessId },
           { $inc: { totalPurchases: total, totalPaid: paidAmount, totalPayable: dueAmount } },
           { session },
         );
