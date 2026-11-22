@@ -286,6 +286,7 @@ const deleteInvoice = asyncHandler(async (req: Request, res) => {
     business: objBusinessId,
     user: new Types.ObjectId(String(userId)),
     role: { $in: ['owner', 'admin'] },
+    status: true,
   });
   if (!ms) throw new ApiError(403, 'Only owner/admin can delete invoices');
 

@@ -3,7 +3,7 @@ import { Request } from 'express';
 import { Types } from 'mongoose';
 import Transaction from '../models/transaction.model';
 import Settlement from '../models/settlement.model';
-import { BusinessMembersModel } from '../models/business-members.model';
+import { requireMembership } from '../utils/businessAuth';
 import asyncHandler from '../utils/asyncHandler';
 import sendResponse from '../utils/sendResponse';
 import ApiError from '../Error/handleApiError';
@@ -23,22 +23,6 @@ const getValidIds = (userId: any, businessId?: string) => {
   return ids;
 };
 
-const requireMembership = async (
-  businessId: Types.ObjectId,
-  userId: Types.ObjectId,
-  roles: string[],
-) => {
-  console.log(businessId, userId, roles);
-  const m = await BusinessMembersModel.findOne({
-    business: businessId,
-    user: userId,
-    role: { $in: roles },
-    // status: 'active',
-  });
-  console.log(m);
-  if (!m) throw new ApiError(403, 'Access denied');
-  return m;
-};
 
 /* ─── Create Transaction ──────────────────────────────── */
 const createTransaction = asyncHandler(async (req: Request, res, next) => {
@@ -258,6 +242,7 @@ const settleTransaction = asyncHandler(async (req: Request, res, next) => {
 
   const transaction = await Transaction.findById(id);
   if (!transaction) throw new ApiError(404, 'Transaction not found');
+  await requireMembership(transaction.business as Types.ObjectId, objectUserId);
   if (transaction.settlementStatus === 'settled')
     throw new ApiError(400, 'Already fully settled');
   if (transaction.settlementStatus === 'not_applicable')
@@ -314,6 +299,11 @@ const getSettlements = asyncHandler(async (req: Request, res, next) => {
   const { id } = req.params;
   if (!id || Array.isArray(id) || !Types.ObjectId.isValid(id))
     throw new ApiError(400, 'Invalid id');
+
+  const { objectUserId } = getValidIds(req.user?._id);
+  const transaction = await Transaction.findById(id).select('business').lean();
+  if (!transaction) throw new ApiError(404, 'Transaction not found');
+  await requireMembership(transaction.business as Types.ObjectId, objectUserId);
 
   const settlements = await Settlement.find({ transaction: id })
     .populate('paidBy', 'firstName lastName email')
@@ -401,15 +391,16 @@ const updateTransaction = asyncHandler(async (req: Request, res, next) => {
   if (!transaction) throw new ApiError(404, 'Transaction not found');
 
   // creator বা owner/admin
+  // The creator may change their own entry, owner/admin anyone's — but only
+  // while they are still an active member (a removed creator used to bypass
+  // the membership check entirely).
   const isCreator =
     transaction.createdBy.toString() === objectUserId.toString();
-  if (!isCreator) {
-    await requireMembership(
-      transaction.business as Types.ObjectId,
-      objectUserId,
-      ['owner', 'admin'],
-    );
-  }
+  await requireMembership(
+    transaction.business as Types.ObjectId,
+    objectUserId,
+    isCreator ? ['owner', 'admin', 'member'] : ['owner', 'admin'],
+  );
 
   if (transaction.settlementStatus === 'settled') {
     throw new ApiError(400, 'Cannot edit a fully settled transaction');
@@ -451,15 +442,16 @@ const deleteTransaction = asyncHandler(async (req: Request, res, next) => {
   const transaction = await Transaction.findById(id);
   if (!transaction) throw new ApiError(404, 'Transaction not found');
 
+  // The creator may change their own entry, owner/admin anyone's — but only
+  // while they are still an active member (a removed creator used to bypass
+  // the membership check entirely).
   const isCreator =
     transaction.createdBy.toString() === objectUserId.toString();
-  if (!isCreator) {
-    await requireMembership(
-      transaction.business as Types.ObjectId,
-      objectUserId,
-      ['owner', 'admin'],
-    );
-  }
+  await requireMembership(
+    transaction.business as Types.ObjectId,
+    objectUserId,
+    isCreator ? ['owner', 'admin', 'member'] : ['owner', 'admin'],
+  );
 
   await Transaction.findByIdAndDelete(id);
   await Settlement.deleteMany({ transaction: id });

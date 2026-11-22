@@ -136,7 +136,8 @@ const getMyBusinesses = asyncHandler(async (req: Request, res, next) => {
 
   const objectUserId = new Types.ObjectId(String(userId));
 
-  const memberships = await BusinessMembersModel.find({ user: objectUserId })
+  // Removed memberships (status:false) must not keep the business in the switcher.
+  const memberships = await BusinessMembersModel.find({ user: objectUserId, status: true })
     .populate(
       'business',
       'name category type owner status mealEnabled currency businessType phone address logoUrl openingBalance cashBalance bankBalance invoiceSettings paymentMethods',
@@ -171,6 +172,7 @@ const updateBusiness = asyncHandler(async (req: Request, res, next) => {
     business: businessId,
     user: objectUserId,
     role: { $in: ['owner', 'admin'] },
+    status: true,
   });
 
   if (!membership) {
@@ -313,6 +315,7 @@ const deleteBusiness = asyncHandler(async (req: Request, res, next) => {
     business: businessId,
     user: objectUserId,
     role: 'owner',
+    status: true,
   });
 
   if (!membership) {
